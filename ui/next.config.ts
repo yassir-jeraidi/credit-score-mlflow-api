@@ -1,8 +1,10 @@
+import path from "path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   // Enable standalone output for Docker
   output: 'standalone',
+
   // Proxy API requests to FastAPI backend during development
   async rewrites() {
     return [

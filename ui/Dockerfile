@@ -1,48 +1,70 @@
-# Build stage
-FROM node:20-alpine AS builder
+## Multi-stage Next.js (pnpm) Dockerfile
+
+FROM node:20-alpine AS base
 
 WORKDIR /app
 
-# Install pnpm
+ENV NODE_ENV=production
+
+# -----------------------------------------------------------------------------
+# 1) Dependencies layer (pnpm install)
+# -----------------------------------------------------------------------------
+FROM base AS deps
+
+# Enable pnpm via corepack
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
-# Copy package files
+# Copy only dependency manifests for caching
 COPY package.json pnpm-lock.yaml ./
 
-# Install dependencies
+# Install dependencies (frozen lockfile for reproducibility)
 RUN pnpm install --frozen-lockfile
 
-# Copy source code
+# -----------------------------------------------------------------------------
+# 2) Builder layer (Next.js build with standalone output)
+# -----------------------------------------------------------------------------
+FROM base AS builder
+
+WORKDIR /app
+
+# Enable pnpm in builder stage
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+# Reuse node_modules from deps stage
+COPY --from=deps /app/node_modules ./node_modules
+
+# Copy full source
 COPY . .
 
-# Build arguments for environment variables
+# Build-time environment (can be overridden by build args)
 ARG API_BASE_URL=http://api:8000
 ARG NEXT_PUBLIC_API_URL=http://localhost:8000
 
 ENV API_BASE_URL=${API_BASE_URL}
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 
-# Build the application
+# Build the Next.js app (standalone output configured in next.config.ts)
 RUN pnpm build
 
-# Production stage
+# -----------------------------------------------------------------------------
+# 3) Runtime layer (minimal image)
+# -----------------------------------------------------------------------------
 FROM node:20-alpine AS runner
 
 WORKDIR /app
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+ENV NODE_ENV=production
 
 # Create non-root user
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+RUN addgroup --system --gid 1001 nodejs \
+  && adduser --system --uid 1001 nextjs
 
-# Copy built files
+# Copy built assets from builder image
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
-# Set ownership
+# Ensure correct ownership
 RUN chown -R nextjs:nodejs /app
 
 USER nextjs
