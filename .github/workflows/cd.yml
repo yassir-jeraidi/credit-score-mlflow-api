@@ -149,6 +149,61 @@ jobs:
             NEXT_PUBLIC_API_URL=http://localhost:8000
 
   # ===========================================================================
+  # Deploy to AWS EC2 via Docker Compose
+  # ===========================================================================
+  deploy:
+    name: Deploy to AWS (Docker Compose)
+    runs-on: ubuntu-latest
+    needs: [build-api, build-ui]
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Deploy on EC2
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER || 'ubuntu' }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+
+            # Login to GHCR (uses GitHub token scoped to this repo)
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # Compose file that pulls built images (api/ui) from GHCR
+            cat > docker-compose.deploy.yml <<'EOF'
+            version: "3.9"
+            services:
+              api:
+                image: ghcr.io/${{ github.repository }}:api
+                env_file:
+                  - /home/ubuntu/.env.credit-score
+                ports:
+                  - "8000:8000"
+                restart: unless-stopped
+
+              ui:
+                image: ghcr.io/${{ github.repository }}:ui
+                environment:
+                  API_BASE_URL: http://api:8000
+                  NEXT_PUBLIC_API_URL: http://api:8000
+                  GOOGLE_GENERATIVE_AI_API_KEY: ${GOOGLE_GENERATIVE_AI_API_KEY}
+                  SESSION_SECRET: ${SESSION_SECRET}
+                depends_on:
+                  - api
+                ports:
+                  - "3000:3000"
+                restart: unless-stopped
+
+            networks:
+              default:
+                name: credit-score-network
+            EOF
+
+            # Pull latest images and restart stack
+            docker compose -f docker-compose.deploy.yml pull
+            docker compose -f docker-compose.deploy.yml up -d --remove-orphans
+
+  # ===========================================================================
   # Create Release (on tag push)
   # ===========================================================================
   release:
