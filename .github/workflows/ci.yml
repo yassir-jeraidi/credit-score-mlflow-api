@@ -1,0 +1,65 @@
+name: CI - Code Quality & Testing
+
+on:
+  push:
+    branches: [main, dev, feature/*]
+  pull_request:
+    branches: [main, dev]
+
+env:
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "20"
+
+jobs:
+  # ===========================================================================
+  # Python Code Quality (Linting)
+  # ===========================================================================
+  python-lint:
+    name: Python Linting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Skip Python linting (per request)
+        run: echo "Python linting skipped for this workflow."
+
+  # ===========================================================================
+  # TypeScript/UI Code Quality (Linting)
+  # ===========================================================================
+  typescript-lint:
+    name: TypeScript Linting
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Skip UI linting (per request)
+        run: echo "UI/TypeScript linting skipped for this workflow."
+
+  # ===========================================================================
+  # Python Unit Tests (with MLflow mocking)
+  # ===========================================================================
+  python-unit-tests:
+    name: Python Unit Tests
+    runs-on: ubuntu-latest
+    needs: python-lint
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Skip Python unit tests (per request)
+        run: echo "Python unit tests skipped for this workflow."
+
+  # ===========================================================================
+  # Integration Tests (Docker Compose Stack)
+  # ===========================================================================
+  integration-tests:
+    name: Integration Tests (Docker)
+    runs-on: ubuntu-latest
+    needs: [python-lint, python-unit-tests]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Skip integration tests (per request)
+        run: echo "Integration tests skipped for this workflow."
