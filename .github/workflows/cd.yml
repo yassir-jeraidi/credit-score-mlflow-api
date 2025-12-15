@@ -81,10 +81,10 @@ jobs:
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
         if: github.event_name != 'pull_request'
+        continue-on-error: true
         with:
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}-api
           artifact-name: sbom-api.spdx.json
-          fail-build: false
 
   # ===========================================================================
   # Build and Push UI Docker Image
