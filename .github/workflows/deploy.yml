@@ -1,21 +1,18 @@
-name: CD - Build & Deploy to AWS
+name: CD - Deploy to AWS
 
 on:
   # CD runs on push to main (after PR merge from dev)
   push:
     branches: [main]
-    tags:
-      - "v*"
-  # CD also runs on PRs targeting main (for validation, no deploy)
+  # CD runs on PRs targeting main (deploy for testing)
   pull_request:
     branches: [main]
-
   # Manual deployment with specific image tag (for rollback)
   workflow_dispatch:
     inputs:
       image_tag:
-        description: "Image tag to deploy (e.g., sha-abc1234 or v1.0.0). Leave empty to build fresh."
-        required: false
+        description: "Image tag to deploy (e.g., sha-abc1234 or v1.0.0)"
+        required: true
         type: string
       skip_health_check:
         description: "Skip health check after deployment"
@@ -29,149 +26,12 @@ env:
 
 jobs:
   # ===========================================================================
-  # Build and Push API Docker Image
-  # ===========================================================================
-  build-api:
-    name: Build & Push API Image
-    runs-on: ubuntu-latest
-    # Skip build if manual dispatch with existing image tag
-    if: ${{ github.event.inputs.image_tag == '' || github.event.inputs.image_tag == null }}
-    permissions:
-      contents: read
-      packages: write
-    outputs:
-      image-tag: ${{ steps.meta.outputs.tags }}
-      image-digest: ${{ steps.build.outputs.digest }}
-      short-sha: ${{ steps.vars.outputs.short-sha }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set variables
-        id: vars
-        run: echo "short-sha=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata for API image
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=branch,suffix=-api
-            type=ref,event=pr,suffix=-api
-            type=semver,pattern={{version}},suffix=-api
-            type=semver,pattern={{major}}.{{minor}},suffix=-api
-            type=sha,prefix=sha-,suffix=-api
-            type=raw,value=api,enable={{is_default_branch}}
-
-      - name: Build and push API image
-        id: build
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
-
-      - name: Generate SBOM
-        uses: anchore/sbom-action@v0
-        if: github.event_name != 'pull_request'
-        continue-on-error: true
-        with:
-          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}-api
-          artifact-name: sbom-api.spdx.json
-
-  # ===========================================================================
-  # Build and Push UI Docker Image
-  # ===========================================================================
-  build-ui:
-    name: Build & Push UI Image
-    runs-on: ubuntu-latest
-    # Skip build if manual dispatch with existing image tag
-    if: ${{ github.event.inputs.image_tag == '' || github.event.inputs.image_tag == null }}
-    permissions:
-      contents: read
-      packages: write
-    outputs:
-      image-tag: ${{ steps.meta.outputs.tags }}
-      image-digest: ${{ steps.build.outputs.digest }}
-      short-sha: ${{ steps.vars.outputs.short-sha }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set variables
-        id: vars
-        run: echo "short-sha=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata for UI image
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=branch,suffix=-ui
-            type=ref,event=pr,suffix=-ui
-            type=semver,pattern={{version}},suffix=-ui
-            type=semver,pattern={{major}}.{{minor}},suffix=-ui
-            type=sha,prefix=sha-,suffix=-ui
-            type=raw,value=ui,enable={{is_default_branch}}
-
-      - name: Build and push UI image
-        id: build
-        uses: docker/build-push-action@v5
-        with:
-          context: ./ui
-          file: ./ui/Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
-          build-args: |
-            API_BASE_URL=http://api:8000
-            NEXT_PUBLIC_API_URL=http://localhost:8000
-
-  # ===========================================================================
   # Deploy to AWS EC2 via Docker Compose
+  # Uses images already built by CI on dev branch
   # ===========================================================================
   deploy:
     name: Deploy to AWS
     runs-on: ubuntu-latest
-    needs: [build-api, build-ui]
-    # Only deploy on push to main or manual dispatch (not PRs)
-    if: |
-      always() &&
-      github.event_name != 'pull_request' &&
-      (needs.build-api.result == 'success' || needs.build-api.result == 'skipped') &&
-      (needs.build-ui.result == 'success' || needs.build-ui.result == 'skipped')
     environment: production
     steps:
       - name: Checkout code
@@ -180,12 +40,17 @@ jobs:
       - name: Determine image tag
         id: tag
         run: |
-          if [ -n "${{ github.event.inputs.image_tag }}" ]; then
-            # Manual deployment with provided tag
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            # Manual deployment - use provided tag
             echo "tag=${{ github.event.inputs.image_tag }}" >> $GITHUB_OUTPUT
             echo "🔖 Using manual tag: ${{ github.event.inputs.image_tag }}"
+          elif [ "${{ github.event_name }}" == "pull_request" ]; then
+            # PR - use the PR head SHA (same as dev branch commit)
+            SHORT_SHA=$(echo "${{ github.event.pull_request.head.sha }}" | cut -c1-7)
+            echo "tag=sha-${SHORT_SHA}" >> $GITHUB_OUTPUT
+            echo "🔖 Using PR head SHA tag: sha-${SHORT_SHA}"
           else
-            # Use SHA from current commit
+            # Push to main - use current commit SHA
             SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
             echo "tag=sha-${SHORT_SHA}" >> $GITHUB_OUTPUT
             echo "🔖 Using SHA tag: sha-${SHORT_SHA}"
@@ -199,23 +64,36 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify images exist in registry
+        id: verify
         run: |
           TAG="${{ steps.tag.outputs.tag }}"
-          echo "🔍 Verifying images exist..."
+          echo "🔍 Verifying images exist in GHCR..."
+          echo "   Looking for images built by CI on dev branch..."
           
           # Check API image
-          docker manifest inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}-api > /dev/null 2>&1 || {
+          if docker manifest inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}-api > /dev/null 2>&1; then
+            echo "✅ API image found: ${TAG}-api"
+          else
             echo "❌ API image not found: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}-api"
+            echo ""
+            echo "💡 This image should have been built by CI on the dev branch."
+            echo "   Make sure CI completed successfully before merging to main."
             exit 1
-          }
-          echo "✅ API image found"
+          fi
           
           # Check UI image
-          docker manifest inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}-ui > /dev/null 2>&1 || {
+          if docker manifest inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}-ui > /dev/null 2>&1; then
+            echo "✅ UI image found: ${TAG}-ui"
+          else
             echo "❌ UI image not found: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}-ui"
+            echo ""
+            echo "💡 This image should have been built by CI on the dev branch."
+            echo "   Make sure CI completed successfully before merging to main."
             exit 1
-          }
-          echo "✅ UI image found"
+          fi
+          
+          echo ""
+          echo "✅ All images verified! Ready to deploy."
 
       - name: Verify Docker on EC2
         uses: appleboy/ssh-action@v1.2.0
@@ -239,11 +117,10 @@ jobs:
               exit 1
             fi
             
-            # Check Docker version
             DOCKER_VERSION=$(docker --version)
             echo "✅ Docker installed: $DOCKER_VERSION"
             
-            # Check if Docker Compose is available (v2 plugin or standalone)
+            # Check if Docker Compose is available
             if docker compose version &> /dev/null; then
               COMPOSE_VERSION=$(docker compose version --short)
               echo "✅ Docker Compose (plugin) installed: $COMPOSE_VERSION"
@@ -252,33 +129,15 @@ jobs:
               echo "✅ Docker Compose (standalone) installed: $COMPOSE_VERSION"
             else
               echo "❌ Docker Compose is not installed!"
-              echo ""
-              echo "Docker Compose V2 is recommended. To install:"
-              echo "  sudo apt-get update"
-              echo "  sudo apt-get install docker-compose-plugin"
               exit 1
             fi
             
             # Check if Docker daemon is running
             if ! docker info &> /dev/null; then
               echo "❌ Docker daemon is not running!"
-              echo ""
-              echo "To start Docker:"
-              echo "  sudo systemctl start docker"
               exit 1
             fi
             echo "✅ Docker daemon is running"
-            
-            # Check if user has Docker permissions
-            if ! docker ps &> /dev/null; then
-              echo "❌ Current user doesn't have Docker permissions!"
-              echo ""
-              echo "To fix:"
-              echo "  sudo usermod -aG docker \$USER"
-              echo "  # Then log out and log back in"
-              exit 1
-            fi
-            echo "✅ User has Docker permissions"
             
             echo ""
             echo "🎉 All Docker prerequisites verified!"
@@ -296,6 +155,7 @@ jobs:
             set -e
             
             echo "🚀 Starting deployment with tag: ${IMAGE_TAG}"
+            echo "   (Images were built by CI on dev branch)"
             
             # Login to GHCR
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
@@ -336,12 +196,12 @@ jobs:
                 name: credit-score-network
             EOF
             
-            # Pull latest images
-            echo "📦 Pulling images..."
+            # Pull images (already built by CI)
+            echo "📦 Pulling images from GHCR..."
             docker compose -f docker-compose.deploy.yml pull
             
-            # Deploy with zero-downtime (stop old, start new)
-            echo "🔄 Deploying new containers..."
+            # Deploy
+            echo "🔄 Deploying containers..."
             docker compose -f docker-compose.deploy.yml up -d --remove-orphans
             
             # Clean up old images
@@ -384,6 +244,7 @@ jobs:
           echo "| **API Image** | \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.tag }}-api\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **UI Image** | \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.tag }}-ui\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Deployed At** | $(date -u +"%Y-%m-%d %H:%M:%S UTC") |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Built By** | CI workflow on dev branch |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🔗 Access" >> $GITHUB_STEP_SUMMARY
           echo "- API: http://${{ secrets.DEPLOY_HOST }}:8000" >> $GITHUB_STEP_SUMMARY
@@ -395,7 +256,6 @@ jobs:
   release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [build-api, build-ui]
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
@@ -440,34 +300,3 @@ jobs:
             ${{ steps.changelog.outputs.content }}
           draft: false
           prerelease: ${{ contains(steps.tag.outputs.name, 'alpha') || contains(steps.tag.outputs.name, 'beta') || contains(steps.tag.outputs.name, 'rc') }}
-
-  # ===========================================================================
-  # Build Status Summary
-  # ===========================================================================
-  notify:
-    name: Build Status Summary
-    runs-on: ubuntu-latest
-    needs: [build-api, build-ui, deploy]
-    if: always()
-    steps:
-      - name: Check build and deploy status
-        run: |
-          echo "## 📊 Pipeline Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Build API | ${{ needs.build-api.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Build UI | ${{ needs.build-ui.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Deploy | ${{ needs.deploy.result }} |" >> $GITHUB_STEP_SUMMARY
-          
-          if [ "${{ needs.build-api.result }}" == "success" ] && [ "${{ needs.build-ui.result }}" == "success" ]; then
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "✅ All builds succeeded!" >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ needs.build-api.result }}" == "skipped" ] && [ "${{ needs.build-ui.result }}" == "skipped" ]; then
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "⏭️ Builds skipped (using existing image)" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "❌ Some jobs failed" >> $GITHUB_STEP_SUMMARY
-            exit 1
-          fi
