@@ -170,13 +170,31 @@ jobs:
             cat > docker-compose.deploy.yml <<EOF
             version: "3.9"
             services:
+              db:
+                image: postgres:15-alpine
+                restart: always
+                env_file:
+                  - /home/ubuntu/.env.credit-score
+                volumes:
+                  - postgres_data:/var/lib/postgresql/data
+                healthcheck:
+                  test: ["CMD-SHELL", "pg_isready -U \${POSTGRES_USER} -d \${POSTGRES_DB}"]
+                  interval: 10s
+                  timeout: 5s
+                  retries: 5
+
               api:
                 image: ghcr.io/${{ github.repository }}:${IMAGE_TAG}-api
                 env_file:
                   - /home/ubuntu/.env.credit-score
+                environment:
+                  - POSTGRES_HOST=db
                 ports:
                   - "8000:8000"
                 restart: unless-stopped
+                depends_on:
+                  db:
+                    condition: service_healthy
                 healthcheck:
                   test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
                   interval: 30s
@@ -196,6 +214,9 @@ jobs:
                 ports:
                   - "3000:3000"
                 restart: unless-stopped
+
+            volumes:
+              postgres_data:
 
             networks:
               default:
