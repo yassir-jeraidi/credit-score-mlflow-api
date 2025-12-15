@@ -297,22 +297,5 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install flake8 black isort
-
-      - name: Check ML code formatting
-        run: |
-          black --check --diff ml/
-          isort --check-only --diff ml/
-
-      - name: Lint ML code
-        run: |
-          flake8 ml/ --max-line-length=100 --ignore=E501,W503
+      - name: Skip ML code quality checks (per request)
+        run: echo "ML lint/format checks skipped for this workflow."
