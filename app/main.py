@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.api import router
+from app.database import engine, Base
 from app.monitoring import (
     PrometheusMiddleware,
     metrics_endpoint,
@@ -35,6 +36,9 @@ async def lifespan(app: FastAPI):
 
     Handles startup and shutdown events.
     """
+    # Create database tables
+    Base.metadata.create_all(bind=engine)
+
     # Startup
     settings = get_settings()
     logger.info(f"Starting {settings.app_name} v{settings.app_version}")

@@ -153,8 +153,8 @@ class PredictionResponse(BaseModel):
         description="Timestamp of the prediction"
     )
 
-    class Config:
-        json_schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "example": {
                 "application_id": "550e8400-e29b-41d4-a716-446655440000",
                 "prediction": "APPROVED",
@@ -165,7 +165,11 @@ class PredictionResponse(BaseModel):
                 "model_version": "1",
                 "timestamp": "2024-01-15T10:30:00Z",
             }
-        }
+        },
+        "protected_namespaces": ()
+    }
+
+
 
 
 class BatchPredictionRequest(BaseModel):
@@ -232,6 +236,8 @@ class ReadinessResponse(BaseModel):
         ...,
         description="Whether MLflow connection is established"
     )
+    model_config = {"protected_namespaces": ()}
+
 
 
 class ModelInfoResponse(BaseModel):
@@ -257,6 +263,8 @@ class ModelInfoResponse(BaseModel):
         ...,
         description="List of input features"
     )
+    model_config = {"protected_namespaces": ()}
+
 
 
 class ErrorResponse(BaseModel):
@@ -278,3 +286,29 @@ class ErrorResponse(BaseModel):
         default_factory=datetime.utcnow,
         description="Error timestamp"
     )
+
+
+class Token(BaseModel):
+    """Token schema."""
+    access_token: str
+    token_type: str
+
+
+class UserBase(BaseModel):
+    """Base user schema."""
+    email: str
+
+
+class UserCreate(UserBase):
+    """User creation schema."""
+    password: str
+
+
+class UserResponse(UserBase):
+    """User response schema."""
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
