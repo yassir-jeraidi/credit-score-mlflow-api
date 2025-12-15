@@ -170,13 +170,37 @@ jobs:
             # Login to GHCR
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             
+            # Create Prometheus config
+            cat > prometheus.yml <<EOF
+            global:
+              scrape_interval: 15s
+              evaluation_interval: 15s
+              external_labels:
+                monitor: 'credit-score-monitor'
+            
+            scrape_configs:
+              - job_name: 'prometheus'
+                static_configs:
+                  - targets: ['localhost:9090']
+              
+              - job_name: 'credit-score-api'
+                static_configs:
+                  - targets: ['api:8000']
+                metrics_path: '/metrics'
+                scrape_interval: 10s
+                scrape_timeout: 5s
+            EOF
+            
             # Create deployment compose file
             cat > docker-compose.deploy.yml <<EOF
-            version: "3.9"
             services:
-              db:
+              # =================================================================
+              # PostgreSQL Database (MLflow Backend Store)
+              # =================================================================
+              postgres:
                 image: postgres:15-alpine
                 restart: always
+                container_name: credit-score-postgres
                 env_file:
                   - /home/ubuntu/.env.credit-score
                 volumes:
@@ -186,54 +210,96 @@ jobs:
                   interval: 10s
                   timeout: 5s
                   retries: 5
+                networks:
+                  - credit-score-network
 
+              # =================================================================
+              # MLflow Tracking Server
+              # =================================================================
               mlflow:
                 image: python:3.11-slim
                 restart: always
+                container_name: credit-score-mlflow
                 depends_on:
-                  db:
+                  postgres:
                     condition: service_healthy
                 environment:
-                  MLFLOW_BACKEND_STORE_URI: postgresql://\${POSTGRES_USER}:\${POSTGRES_PASSWORD}@db:5432/\${POSTGRES_DB}
+                  MLFLOW_BACKEND_STORE_URI: postgresql://\${POSTGRES_USER}:\${POSTGRES_PASSWORD}@postgres:5432/\${POSTGRES_DB}
                   MLFLOW_ARTIFACT_ROOT: /mlflow/artifacts
                 volumes:
                   - mlflow_artifacts:/mlflow/artifacts
                 command: >
-                  bash -c "pip install 'mlflow<2.10' psycopg2-binary && 
-                  mlflow server --backend-store-uri postgresql://\${POSTGRES_USER}:\${POSTGRES_PASSWORD}@db:5432/\${POSTGRES_DB} 
+                  bash -c "apt-get update && apt-get install -y curl && 
+                  pip install 'mlflow<2.10' psycopg2-binary && 
+                  mlflow server --backend-store-uri postgresql://\${POSTGRES_USER}:\${POSTGRES_PASSWORD}@postgres:5432/\${POSTGRES_DB} 
                   --default-artifact-root /mlflow/artifacts 
                   --host 0.0.0.0 --port 5001"
                 healthcheck:
                   test: ["CMD", "curl", "-f", "http://localhost:5001/api/2.0/mlflow/experiments/search?max_results=1"]
                   interval: 30s
                   timeout: 10s
-                  retries: 5
-                  start_period: 30s
+                  retries: 10
+                  start_period: 90s
+                networks:
+                  - credit-score-network
 
+              # =================================================================
+              # Credit Score API
+              # =================================================================
               api:
                 image: ghcr.io/${{ github.repository }}:${IMAGE_TAG}-api
+                container_name: credit-score-api
                 env_file:
                   - /home/ubuntu/.env.credit-score
                 environment:
-                  - POSTGRES_HOST=db
+                  - POSTGRES_HOST=postgres
                   - MLFLOW_TRACKING_URI=http://mlflow:5001
                 ports:
                   - "8000:8000"
                 restart: unless-stopped
                 depends_on:
-                  db:
+                  postgres:
                     condition: service_healthy
                   mlflow:
                     condition: service_healthy
                 healthcheck:
-                  test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+                  test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
                   interval: 30s
                   timeout: 10s
                   retries: 3
                   start_period: 40s
+                networks:
+                  - credit-score-network
 
+              # =================================================================
+              # Prometheus Monitoring
+              # =================================================================
+              prometheus:
+                image: prom/prometheus:v2.48.0
+                container_name: credit-score-prometheus
+                volumes:
+                  - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+                  - prometheus_data:/prometheus
+                ports:
+                  - "9090:9090"
+                command:
+                  - "--config.file=/etc/prometheus/prometheus.yml"
+                  - "--storage.tsdb.path=/prometheus"
+                  - "--web.enable-lifecycle"
+                healthcheck:
+                  test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
+                  interval: 30s
+                  timeout: 10s
+                  retries: 3
+                networks:
+                  - credit-score-network
+
+              # =================================================================
+              # Next.js UI
+              # =================================================================
               ui:
                 image: ghcr.io/${{ github.repository }}:${IMAGE_TAG}-ui
+                container_name: credit-score-ui
                 environment:
                   API_BASE_URL: http://api:8000
                   NEXT_PUBLIC_API_URL: http://api:8000
@@ -244,14 +310,17 @@ jobs:
                 ports:
                   - "3000:3000"
                 restart: unless-stopped
+                networks:
+                  - credit-score-network
 
             volumes:
               postgres_data:
               mlflow_artifacts:
+              prometheus_data:
 
             networks:
-              default:
-                name: credit-score-network
+              credit-score-network:
+                driver: bridge
             EOF
             
             # Pull images (already built by CI)
