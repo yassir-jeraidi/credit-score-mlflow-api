@@ -1,18 +1,21 @@
-name: CD - Deploy to AWS
+name: CD - Build & Deploy to AWS
 
 on:
-  # Trigger after CI succeeds on main branch
-  workflow_run:
-    workflows: ["CI - Build, Test & Push"]
-    types: [completed]
+  # CD runs on push to main (after PR merge from dev)
+  push:
+    branches: [main]
+    tags:
+      - "v*"
+  # CD also runs on PRs targeting main (for validation, no deploy)
+  pull_request:
     branches: [main]
 
   # Manual deployment with specific image tag (for rollback)
   workflow_dispatch:
     inputs:
       image_tag:
-        description: "Image tag to deploy (e.g., sha-abc1234 or v1.0.0)"
-        required: true
+        description: "Image tag to deploy (e.g., sha-abc1234 or v1.0.0). Leave empty to build fresh."
+        required: false
         type: string
       skip_health_check:
         description: "Skip health check after deployment"
@@ -26,15 +29,149 @@ env:
 
 jobs:
   # ===========================================================================
+  # Build and Push API Docker Image
+  # ===========================================================================
+  build-api:
+    name: Build & Push API Image
+    runs-on: ubuntu-latest
+    # Skip build if manual dispatch with existing image tag
+    if: ${{ github.event.inputs.image_tag == '' || github.event.inputs.image_tag == null }}
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.build.outputs.digest }}
+      short-sha: ${{ steps.vars.outputs.short-sha }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set variables
+        id: vars
+        run: echo "short-sha=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for API image
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch,suffix=-api
+            type=ref,event=pr,suffix=-api
+            type=semver,pattern={{version}},suffix=-api
+            type=semver,pattern={{major}}.{{minor}},suffix=-api
+            type=sha,prefix=sha-,suffix=-api
+            type=raw,value=api,enable={{is_default_branch}}
+
+      - name: Build and push API image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        if: github.event_name != 'pull_request'
+        continue-on-error: true
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}-api
+          artifact-name: sbom-api.spdx.json
+
+  # ===========================================================================
+  # Build and Push UI Docker Image
+  # ===========================================================================
+  build-ui:
+    name: Build & Push UI Image
+    runs-on: ubuntu-latest
+    # Skip build if manual dispatch with existing image tag
+    if: ${{ github.event.inputs.image_tag == '' || github.event.inputs.image_tag == null }}
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.build.outputs.digest }}
+      short-sha: ${{ steps.vars.outputs.short-sha }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set variables
+        id: vars
+        run: echo "short-sha=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for UI image
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch,suffix=-ui
+            type=ref,event=pr,suffix=-ui
+            type=semver,pattern={{version}},suffix=-ui
+            type=semver,pattern={{major}}.{{minor}},suffix=-ui
+            type=sha,prefix=sha-,suffix=-ui
+            type=raw,value=ui,enable={{is_default_branch}}
+
+      - name: Build and push UI image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: ./ui
+          file: ./ui/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            API_BASE_URL=http://api:8000
+            NEXT_PUBLIC_API_URL=http://localhost:8000
+
+  # ===========================================================================
   # Deploy to AWS EC2 via Docker Compose
   # ===========================================================================
   deploy:
     name: Deploy to AWS
     runs-on: ubuntu-latest
-    # Only deploy if CI succeeded (for workflow_run) or always for manual dispatch
+    needs: [build-api, build-ui]
+    # Only deploy on push to main or manual dispatch (not PRs)
     if: |
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+      always() &&
+      github.event_name != 'pull_request' &&
+      (needs.build-api.result == 'success' || needs.build-api.result == 'skipped') &&
+      (needs.build-ui.result == 'success' || needs.build-ui.result == 'skipped')
     environment: production
     steps:
       - name: Checkout code
@@ -43,13 +180,13 @@ jobs:
       - name: Determine image tag
         id: tag
         run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            # Manual deployment - use provided tag
+          if [ -n "${{ github.event.inputs.image_tag }}" ]; then
+            # Manual deployment with provided tag
             echo "tag=${{ github.event.inputs.image_tag }}" >> $GITHUB_OUTPUT
             echo "🔖 Using manual tag: ${{ github.event.inputs.image_tag }}"
           else
-            # Workflow run - use SHA from triggering workflow
-            SHORT_SHA=$(echo "${{ github.event.workflow_run.head_sha }}" | cut -c1-7)
+            # Use SHA from current commit
+            SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
             echo "tag=sha-${SHORT_SHA}" >> $GITHUB_OUTPUT
             echo "🔖 Using SHA tag: sha-${SHORT_SHA}"
           fi
@@ -253,15 +390,13 @@ jobs:
           echo "- UI: http://${{ secrets.DEPLOY_HOST }}:3000" >> $GITHUB_STEP_SUMMARY
 
   # ===========================================================================
-  # Create Release (on tag push via CI)
+  # Create Release (on tag push)
   # ===========================================================================
   release:
     name: Create Release
     runs-on: ubuntu-latest
-    if: |
-      github.event_name == 'workflow_run' && 
-      github.event.workflow_run.conclusion == 'success' &&
-      startsWith(github.event.workflow_run.head_branch, 'refs/tags/v')
+    needs: [build-api, build-ui]
+    if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
     steps:
@@ -273,8 +408,7 @@ jobs:
       - name: Get tag name
         id: tag
         run: |
-          TAG_NAME="${{ github.event.workflow_run.head_branch }}"
-          TAG_NAME="${TAG_NAME#refs/tags/}"
+          TAG_NAME="${{ github.ref_name }}"
           echo "name=${TAG_NAME}" >> $GITHUB_OUTPUT
 
       - name: Generate changelog
@@ -308,20 +442,32 @@ jobs:
           prerelease: ${{ contains(steps.tag.outputs.name, 'alpha') || contains(steps.tag.outputs.name, 'beta') || contains(steps.tag.outputs.name, 'rc') }}
 
   # ===========================================================================
-  # Notify deployment failure
+  # Build Status Summary
   # ===========================================================================
-  notify-failure:
-    name: Notify Deployment Skipped
+  notify:
+    name: Build Status Summary
     runs-on: ubuntu-latest
-    if: |
-      github.event_name == 'workflow_run' && 
-      github.event.workflow_run.conclusion != 'success'
+    needs: [build-api, build-ui, deploy]
+    if: always()
     steps:
-      - name: Report CI failure
+      - name: Check build and deploy status
         run: |
-          echo "## ⚠️ Deployment Skipped" >> $GITHUB_STEP_SUMMARY
+          echo "## 📊 Pipeline Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "CI workflow did not succeed. Deployment was not triggered." >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**CI Workflow Result:** ${{ github.event.workflow_run.conclusion }}" >> $GITHUB_STEP_SUMMARY
-          echo "**CI Workflow Run:** [View Run](${{ github.event.workflow_run.html_url }})" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Build API | ${{ needs.build-api.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build UI | ${{ needs.build-ui.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Deploy | ${{ needs.deploy.result }} |" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ needs.build-api.result }}" == "success" ] && [ "${{ needs.build-ui.result }}" == "success" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "✅ All builds succeeded!" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.build-api.result }}" == "skipped" ] && [ "${{ needs.build-ui.result }}" == "skipped" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "⏭️ Builds skipped (using existing image)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "❌ Some jobs failed" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
