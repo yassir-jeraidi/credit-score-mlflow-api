@@ -261,6 +261,54 @@ pytest tests/ -v --cov=app --cov=ml --cov-report=html
 docker-compose run --rm api pytest tests/ -v
 ```
 
+## Authentication & Security
+
+The API is protected using JWT (JSON Web Tokens).
+
+### 1. Register a new user
+```bash
+curl -X POST "http://localhost:8000/api/v1/auth/register" \
+     -H "Content-Type: application/json" \
+     -d '{"email": "user@example.com", "password": "securepassword123"}'
+```
+
+### 2. Login to get a token
+```bash
+curl -X POST "http://localhost:8000/api/v1/auth/login" \
+     -H "Content-Type: application/x-www-form-urlencoded" \
+     -d "username=user@example.com&password=securepassword123"
+```
+Response:
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "bearer"
+}
+```
+
+### 3. Access Protected Endpoints
+Use the token in the `Authorization` header:
+
+```bash
+TOKEN="your_access_token_here"
+
+curl -X POST "http://localhost:8000/api/v1/predict" \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "age": 30,
+       "income": 50000,
+       "employment_length": 5,
+       "loan_amount": 10000,
+       "loan_intent": "PERSONAL",
+       "home_ownership": "RENT",
+       "credit_history_length": 5,
+       "num_credit_lines": 2,
+       "derogatory_marks": 0,
+       "total_debt": 1000
+     }'
+```
+
 ## 📊 Monitoring
 
 ### Prometheus Metrics
