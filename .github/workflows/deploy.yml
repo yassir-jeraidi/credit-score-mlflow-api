@@ -1,0 +1,327 @@
+name: CD - Deploy to AWS
+
+on:
+  # Trigger after CI succeeds on main branch
+  workflow_run:
+    workflows: ["CI - Build, Test & Push"]
+    types: [completed]
+    branches: [main]
+
+  # Manual deployment with specific image tag (for rollback)
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to deploy (e.g., sha-abc1234 or v1.0.0)"
+        required: true
+        type: string
+      skip_health_check:
+        description: "Skip health check after deployment"
+        required: false
+        default: false
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ===========================================================================
+  # Deploy to AWS EC2 via Docker Compose
+  # ===========================================================================
+  deploy:
+    name: Deploy to AWS
+    runs-on: ubuntu-latest
+    # Only deploy if CI succeeded (for workflow_run) or always for manual dispatch
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    environment: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Determine image tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            # Manual deployment - use provided tag
+            echo "tag=${{ github.event.inputs.image_tag }}" >> $GITHUB_OUTPUT
+            echo "🔖 Using manual tag: ${{ github.event.inputs.image_tag }}"
+          else
+            # Workflow run - use SHA from triggering workflow
+            SHORT_SHA=$(echo "${{ github.event.workflow_run.head_sha }}" | cut -c1-7)
+            echo "tag=sha-${SHORT_SHA}" >> $GITHUB_OUTPUT
+            echo "🔖 Using SHA tag: sha-${SHORT_SHA}"
+          fi
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify images exist in registry
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          echo "🔍 Verifying images exist..."
+          
+          # Check API image
+          docker manifest inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}-api > /dev/null 2>&1 || {
+            echo "❌ API image not found: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}-api"
+            exit 1
+          }
+          echo "✅ API image found"
+          
+          # Check UI image
+          docker manifest inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}-ui > /dev/null 2>&1 || {
+            echo "❌ UI image not found: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}-ui"
+            exit 1
+          }
+          echo "✅ UI image found"
+
+      - name: Verify Docker on EC2
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER || 'ubuntu' }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+            
+            echo "🔍 Verifying Docker installation..."
+            
+            # Check if Docker is installed
+            if ! command -v docker &> /dev/null; then
+              echo "❌ Docker is not installed on this server!"
+              echo ""
+              echo "To install Docker, run:"
+              echo "  curl -fsSL https://get.docker.com -o get-docker.sh"
+              echo "  sudo sh get-docker.sh"
+              echo "  sudo usermod -aG docker \$USER"
+              exit 1
+            fi
+            
+            # Check Docker version
+            DOCKER_VERSION=$(docker --version)
+            echo "✅ Docker installed: $DOCKER_VERSION"
+            
+            # Check if Docker Compose is available (v2 plugin or standalone)
+            if docker compose version &> /dev/null; then
+              COMPOSE_VERSION=$(docker compose version --short)
+              echo "✅ Docker Compose (plugin) installed: $COMPOSE_VERSION"
+            elif command -v docker-compose &> /dev/null; then
+              COMPOSE_VERSION=$(docker-compose --version)
+              echo "✅ Docker Compose (standalone) installed: $COMPOSE_VERSION"
+            else
+              echo "❌ Docker Compose is not installed!"
+              echo ""
+              echo "Docker Compose V2 is recommended. To install:"
+              echo "  sudo apt-get update"
+              echo "  sudo apt-get install docker-compose-plugin"
+              exit 1
+            fi
+            
+            # Check if Docker daemon is running
+            if ! docker info &> /dev/null; then
+              echo "❌ Docker daemon is not running!"
+              echo ""
+              echo "To start Docker:"
+              echo "  sudo systemctl start docker"
+              exit 1
+            fi
+            echo "✅ Docker daemon is running"
+            
+            # Check if user has Docker permissions
+            if ! docker ps &> /dev/null; then
+              echo "❌ Current user doesn't have Docker permissions!"
+              echo ""
+              echo "To fix:"
+              echo "  sudo usermod -aG docker \$USER"
+              echo "  # Then log out and log back in"
+              exit 1
+            fi
+            echo "✅ User has Docker permissions"
+            
+            echo ""
+            echo "🎉 All Docker prerequisites verified!"
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          IMAGE_TAG: ${{ steps.tag.outputs.tag }}
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER || 'ubuntu' }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: IMAGE_TAG
+          script: |
+            set -e
+            
+            echo "🚀 Starting deployment with tag: ${IMAGE_TAG}"
+            
+            # Login to GHCR
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            
+            # Create deployment compose file
+            cat > docker-compose.deploy.yml <<EOF
+            version: "3.9"
+            services:
+              api:
+                image: ghcr.io/${{ github.repository }}:${IMAGE_TAG}-api
+                env_file:
+                  - /home/ubuntu/.env.credit-score
+                ports:
+                  - "8000:8000"
+                restart: unless-stopped
+                healthcheck:
+                  test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+                  interval: 30s
+                  timeout: 10s
+                  retries: 3
+                  start_period: 40s
+
+              ui:
+                image: ghcr.io/${{ github.repository }}:${IMAGE_TAG}-ui
+                environment:
+                  API_BASE_URL: http://api:8000
+                  NEXT_PUBLIC_API_URL: http://api:8000
+                  GOOGLE_GENERATIVE_AI_API_KEY: \${GOOGLE_GENERATIVE_AI_API_KEY}
+                  SESSION_SECRET: \${SESSION_SECRET}
+                depends_on:
+                  - api
+                ports:
+                  - "3000:3000"
+                restart: unless-stopped
+
+            networks:
+              default:
+                name: credit-score-network
+            EOF
+            
+            # Pull latest images
+            echo "📦 Pulling images..."
+            docker compose -f docker-compose.deploy.yml pull
+            
+            # Deploy with zero-downtime (stop old, start new)
+            echo "🔄 Deploying new containers..."
+            docker compose -f docker-compose.deploy.yml up -d --remove-orphans
+            
+            # Clean up old images
+            docker image prune -f
+            
+            echo "✅ Deployment completed!"
+            echo "📍 Deployed tag: ${IMAGE_TAG}"
+
+      - name: Health check
+        if: ${{ github.event.inputs.skip_health_check != 'true' }}
+        run: |
+          echo "⏳ Waiting for services to start..."
+          sleep 30
+          
+          echo "🔍 Running health checks..."
+          
+          # Check API health
+          API_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.DEPLOY_HOST }}:8000/health || echo "000")
+          if [ "$API_STATUS" == "200" ]; then
+            echo "✅ API is healthy (HTTP $API_STATUS)"
+          else
+            echo "⚠️ API health check returned HTTP $API_STATUS"
+          fi
+          
+          # Check UI health
+          UI_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.DEPLOY_HOST }}:3000 || echo "000")
+          if [ "$UI_STATUS" == "200" ]; then
+            echo "✅ UI is healthy (HTTP $UI_STATUS)"
+          else
+            echo "⚠️ UI health check returned HTTP $UI_STATUS"
+          fi
+
+      - name: Deployment summary
+        run: |
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Image Tag** | \`${{ steps.tag.outputs.tag }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **API Image** | \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.tag }}-api\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **UI Image** | \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.tag }}-ui\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Deployed At** | $(date -u +"%Y-%m-%d %H:%M:%S UTC") |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔗 Access" >> $GITHUB_STEP_SUMMARY
+          echo "- API: http://${{ secrets.DEPLOY_HOST }}:8000" >> $GITHUB_STEP_SUMMARY
+          echo "- UI: http://${{ secrets.DEPLOY_HOST }}:3000" >> $GITHUB_STEP_SUMMARY
+
+  # ===========================================================================
+  # Create Release (on tag push via CI)
+  # ===========================================================================
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_run' && 
+      github.event.workflow_run.conclusion == 'success' &&
+      startsWith(github.event.workflow_run.head_branch, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get tag name
+        id: tag
+        run: |
+          TAG_NAME="${{ github.event.workflow_run.head_branch }}"
+          TAG_NAME="${TAG_NAME#refs/tags/}"
+          echo "name=${TAG_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        id: changelog
+        uses: orhun/git-cliff-action@v3
+        with:
+          config: .github/cliff.toml
+          args: --latest --strip header
+        continue-on-error: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          body: |
+            ## Docker Images
+
+            **API Image:**
+            ```
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.name }}-api
+            ```
+
+            **UI Image:**
+            ```
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.name }}-ui
+            ```
+
+            ## Changelog
+            ${{ steps.changelog.outputs.content }}
+          draft: false
+          prerelease: ${{ contains(steps.tag.outputs.name, 'alpha') || contains(steps.tag.outputs.name, 'beta') || contains(steps.tag.outputs.name, 'rc') }}
+
+  # ===========================================================================
+  # Notify deployment failure
+  # ===========================================================================
+  notify-failure:
+    name: Notify Deployment Skipped
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_run' && 
+      github.event.workflow_run.conclusion != 'success'
+    steps:
+      - name: Report CI failure
+        run: |
+          echo "## ⚠️ Deployment Skipped" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "CI workflow did not succeed. Deployment was not triggered." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**CI Workflow Result:** ${{ github.event.workflow_run.conclusion }}" >> $GITHUB_STEP_SUMMARY
+          echo "**CI Workflow Run:** [View Run](${{ github.event.workflow_run.html_url }})" >> $GITHUB_STEP_SUMMARY
