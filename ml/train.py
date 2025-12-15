@@ -36,7 +36,7 @@ from ml.config import (
     TEST_SIZE,
     RANDOM_STATE,
 )
-from ml.data_generator import generate_credit_data, split_data
+from ml.data_generator import generate_credit_data, split_data, load_from_csv, generate_and_save_data, RAW_DATA_PATH
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -130,15 +130,19 @@ def train_model(
     model_params: Optional[Dict[str, Any]] = None,
     mlflow_tracking_uri: Optional[str] = None,
     register_model: bool = True,
+    data_path: Optional[str] = None,
+    generate_new_data: bool = False,
 ) -> str:
     """
     Train credit scoring model with MLflow tracking.
 
     Args:
-        n_samples: Number of training samples
+        n_samples: Number of training samples (used if generating new data)
         model_params: Optional model hyperparameters
         mlflow_tracking_uri: MLflow tracking server URI
         register_model: Whether to register model in MLflow Registry
+        data_path: Path to CSV data file (uses default if None)
+        generate_new_data: If True, generate new data instead of loading from CSV
 
     Returns:
         MLflow run ID
@@ -153,8 +157,21 @@ def train_model(
     # Set or create experiment
     mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
 
-    logger.info("Generating training data...")
-    df = generate_credit_data(n_samples=n_samples)
+    # Load or generate data
+    if generate_new_data:
+        logger.info(f"Generating {n_samples} new training samples...")
+        df, saved_path = generate_and_save_data(n_samples=n_samples)
+        logger.info(f"Data saved to {saved_path}")
+    else:
+        data_file = data_path if data_path else RAW_DATA_PATH
+        try:
+            logger.info(f"Loading training data from {data_file}...")
+            df = load_from_csv(data_file)
+        except FileNotFoundError:
+            logger.warning(f"Data file not found at {data_file}. Generating new data...")
+            df, saved_path = generate_and_save_data(n_samples=n_samples)
+            logger.info(f"Data saved to {saved_path}")
+    
     X_train, X_test, y_train, y_test = split_data(df, test_size=TEST_SIZE)
 
     logger.info(f"Training data shape: {X_train.shape}")
@@ -303,7 +320,7 @@ if __name__ == "__main__":
         "--n-samples",
         type=int,
         default=DEFAULT_SAMPLE_SIZE,
-        help="Number of training samples"
+        help="Number of training samples (used when generating new data)"
     )
     parser.add_argument(
         "--mlflow-uri",
@@ -322,6 +339,17 @@ if __name__ == "__main__":
         action="store_true",
         help="Promote model to Production after training"
     )
+    parser.add_argument(
+        "--data-path",
+        type=str,
+        default=None,
+        help="Path to CSV data file (uses default data/raw/credit_data.csv if not specified)"
+    )
+    parser.add_argument(
+        "--generate-data",
+        action="store_true",
+        help="Generate new data instead of loading from CSV"
+    )
 
     args = parser.parse_args()
 
@@ -329,6 +357,8 @@ if __name__ == "__main__":
         n_samples=args.n_samples,
         mlflow_tracking_uri=args.mlflow_uri,
         register_model=args.register,
+        data_path=args.data_path,
+        generate_new_data=args.generate_data,
     )
 
     if args.promote:

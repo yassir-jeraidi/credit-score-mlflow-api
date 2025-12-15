@@ -88,10 +88,13 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-mlflow}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mlflow123}
       POSTGRES_DB: ${POSTGRES_DB:-mlflow}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
 
     volumes:
       - .:/app
       - mlflow_artifacts:/mlflow/artifacts
+      - credit_data:/app/data
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
     ports:
@@ -175,14 +178,21 @@ services:
     environment:
       MLFLOW_TRACKING_URI: http://mlflow:5001
       GIT_PYTHON_REFRESH: quiet
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_DEFAULT_REGION: eu-west-3
     volumes:
       - mlflow_artifacts:/mlflow/artifacts
+      - credit_data:/app/data
     command: >
-      python -m ml.train 
-        --n-samples 50000 
-        --mlflow-uri http://mlflow:5001 
-        --register 
-        --promote
+      bash -c "
+        echo 'Pulling data from DVC...' &&
+        dvc pull || echo 'DVC pull skipped or failed, will generate data' &&
+        python -m ml.train 
+          --mlflow-uri http://mlflow:5001 
+          --register 
+          --promote
+      "
     depends_on:
       mlflow:
         condition: service_healthy
@@ -190,6 +200,34 @@ services:
       - credit-score-network
     profiles:
       - train
+
+  # ==========================================================================
+  # Data Generation Job (run manually)
+  # ==========================================================================
+  generate-data:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: credit-score-generate-data
+    user: root
+    environment:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_DEFAULT_REGION: eu-west-3
+    volumes:
+      - credit_data:/app/data
+    command: >
+      bash -c "
+        python -m ml.data_generator --n-samples 50000 &&
+        echo 'Data generated successfully' &&
+        dvc add data/raw/credit_data.csv &&
+        dvc push &&
+        echo 'Data pushed to S3'
+      "
+    networks:
+      - credit-score-network
+    profiles:
+      - generate-data
 
 # ==========================================================================
 # Networks
@@ -205,3 +243,4 @@ volumes:
   postgres_data:
   mlflow_artifacts:
   prometheus_data:
+  credit_data:

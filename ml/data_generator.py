@@ -4,8 +4,10 @@ Synthetic Credit Scoring Data Generator.
 Generates realistic credit application data for model training.
 Uses synthetic data to avoid RGPD/GDPR compliance issues.
 """
+import os
 import numpy as np
 import pandas as pd
+from pathlib import Path
 from typing import Tuple, Optional
 
 from ml.config import (
@@ -14,6 +16,11 @@ from ml.config import (
     DEFAULT_SAMPLE_SIZE,
     RANDOM_STATE,
 )
+
+# Data directory configuration
+DATA_DIR = Path(__file__).parent.parent / "data"
+RAW_DATA_PATH = DATA_DIR / "raw" / "credit_data.csv"
+PROCESSED_DATA_DIR = DATA_DIR / "processed"
 
 
 def generate_credit_data(
@@ -99,6 +106,87 @@ def generate_credit_data(
     return df
 
 
+def save_to_csv(
+    df: pd.DataFrame,
+    filepath: Optional[Path] = None,
+) -> Path:
+    """
+    Save DataFrame to CSV file.
+
+    Args:
+        df: DataFrame to save
+        filepath: Optional path to save to (defaults to RAW_DATA_PATH)
+
+    Returns:
+        Path where data was saved
+    """
+    if filepath is None:
+        filepath = RAW_DATA_PATH
+    
+    # Ensure directory exists
+    filepath = Path(filepath)
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Save to CSV
+    df.to_csv(filepath, index=False)
+    print(f"Data saved to {filepath}")
+    
+    return filepath
+
+
+def load_from_csv(
+    filepath: Optional[Path] = None,
+) -> pd.DataFrame:
+    """
+    Load DataFrame from CSV file.
+
+    Args:
+        filepath: Optional path to load from (defaults to RAW_DATA_PATH)
+
+    Returns:
+        DataFrame loaded from CSV
+    
+    Raises:
+        FileNotFoundError: If file doesn't exist
+    """
+    if filepath is None:
+        filepath = RAW_DATA_PATH
+    
+    filepath = Path(filepath)
+    
+    if not filepath.exists():
+        raise FileNotFoundError(
+            f"Data file not found at {filepath}. "
+            "Run 'python -m ml.data_generator' to generate data first."
+        )
+    
+    df = pd.read_csv(filepath)
+    print(f"Loaded {len(df)} samples from {filepath}")
+    
+    return df
+
+
+def generate_and_save_data(
+    n_samples: int = DEFAULT_SAMPLE_SIZE,
+    random_state: int = RANDOM_STATE,
+    filepath: Optional[Path] = None,
+) -> Tuple[pd.DataFrame, Path]:
+    """
+    Generate synthetic data and save to CSV.
+
+    Args:
+        n_samples: Number of samples to generate
+        random_state: Random seed for reproducibility
+        filepath: Optional path to save to
+
+    Returns:
+        Tuple of (DataFrame, Path where saved)
+    """
+    df = generate_credit_data(n_samples=n_samples, random_state=random_state)
+    saved_path = save_to_csv(df, filepath)
+    return df, saved_path
+
+
 def _generate_target(df: pd.DataFrame) -> np.ndarray:
     """
     Generate target variable (credit decision) based on risk factors.
@@ -178,9 +266,43 @@ def split_data(
 
 
 if __name__ == "__main__":
-    # Generate and preview data
-    df = generate_credit_data(n_samples=1000)
-    print(f"Generated {len(df)} samples")
-    print(f"\nFeatures:\n{df.columns.tolist()}")
-    print(f"\nTarget distribution:\n{df['target'].value_counts(normalize=True)}")
-    print(f"\nSample data:\n{df.head()}")
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Generate synthetic credit data")
+    parser.add_argument(
+        "--n-samples",
+        type=int,
+        default=DEFAULT_SAMPLE_SIZE,
+        help=f"Number of samples to generate (default: {DEFAULT_SAMPLE_SIZE})"
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        default=None,
+        help=f"Output CSV path (default: {RAW_DATA_PATH})"
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=RANDOM_STATE,
+        help=f"Random seed (default: {RANDOM_STATE})"
+    )
+    
+    args = parser.parse_args()
+    
+    output_path = Path(args.output) if args.output else None
+    
+    # Generate and save data
+    df, saved_path = generate_and_save_data(
+        n_samples=args.n_samples,
+        random_state=args.seed,
+        filepath=output_path,
+    )
+    
+    print(f"\nGenerated {len(df)} samples")
+    print(f"Features: {df.columns.tolist()}")
+    print(f"\nTarget distribution:")
+    print(df['target'].value_counts(normalize=True))
+    print(f"\nSample data:")
+    print(df.head())
+    print(f"\nData saved to: {saved_path}")

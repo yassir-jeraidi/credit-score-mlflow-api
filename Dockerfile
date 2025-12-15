@@ -52,6 +52,9 @@ COPY --from=builder /opt/venv /opt/venv
 # Set working directory
 WORKDIR /app
 
+# Create data directory
+RUN mkdir -p /app/data/raw /app/data/processed
+
 # Copy application code
 COPY --chown=appuser:appuser . .
 
