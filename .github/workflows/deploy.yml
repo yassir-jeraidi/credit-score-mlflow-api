@@ -218,12 +218,15 @@ jobs:
           
           echo "🔍 Running health checks..."
           
+          FAILED=false
+          
           # Check API health
           API_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.DEPLOY_HOST }}:8000/health || echo "000")
           if [ "$API_STATUS" == "200" ]; then
             echo "✅ API is healthy (HTTP $API_STATUS)"
           else
             echo "⚠️ API health check returned HTTP $API_STATUS"
+            FAILED=true
           fi
           
           # Check UI health
@@ -232,6 +235,20 @@ jobs:
             echo "✅ UI is healthy (HTTP $UI_STATUS)"
           else
             echo "⚠️ UI health check returned HTTP $UI_STATUS"
+            FAILED=true
+          fi
+          
+          if [ "$FAILED" == "true" ]; then
+            echo ""
+            echo "❌ Health checks failed! Fetching container logs..."
+            echo "==================================================="
+            echo ">>> API Logs (last 50 lines):"
+            docker compose -f docker-compose.deploy.yml logs --tail=50 api
+            echo ""
+            echo ">>> UI Logs (last 50 lines):"
+            docker compose -f docker-compose.deploy.yml logs --tail=50 ui
+            echo "==================================================="
+            exit 1
           fi
 
       - name: Deployment summary
