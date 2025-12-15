@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.main import app
 from app.schemas import CreditApplication
+from app import security
 
 
 @pytest.fixture
@@ -28,6 +29,51 @@ def client() -> Generator[TestClient, None, None]:
     """
     with TestClient(app) as test_client:
         yield test_client
+
+
+@pytest.fixture
+def auth_token(client: TestClient) -> str:
+    """
+    Create a test user and return authentication token.
+    
+    Returns:
+        JWT access token for authenticated requests
+    """
+    # Create test user
+    test_user = {
+        "email": "test@example.com",
+        "password": "testpassword123"
+    }
+    
+    # Try to register (may fail if user exists)
+    client.post("/api/v1/auth/register", json=test_user)
+    
+    # Login to get token
+    response = client.post(
+        "/api/v1/auth/login",
+        data={"username": test_user["email"], "password": test_user["password"]}
+    )
+    
+    if response.status_code == 200:
+        return response.json()["access_token"]
+    
+    # Fallback: create token directly for testing
+    from datetime import timedelta
+    return security.create_access_token(
+        data={"sub": "test@example.com"},
+        expires_delta=timedelta(minutes=30)
+    )
+
+
+@pytest.fixture
+def auth_headers(auth_token: str) -> Dict[str, str]:
+    """
+    Create authorization headers with token.
+    
+    Returns:
+        Headers dict with Bearer token
+    """
+    return {"Authorization": f"Bearer {auth_token}"}
 
 
 @pytest.fixture
