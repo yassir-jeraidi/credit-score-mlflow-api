@@ -39,6 +39,11 @@ class Settings(BaseSettings):
         env="MODEL_STAGE"
     )
 
+    # Security
+    jwt_secret_key: str = Field(default="secret", env="JWT_SECRET")
+    jwt_algorithm: str = Field(default="HS256", env="JWT_ALGORITHM")
+    access_token_expire_minutes: int = Field(default=30, env="JWT_EXPIRES_IN_MINUTES")
+
     # PostgreSQL (for MLflow backend)
     postgres_user: str = Field(default="mlflow", env="POSTGRES_USER")
     postgres_password: str = Field(default="mlflow123", env="POSTGRES_PASSWORD")
