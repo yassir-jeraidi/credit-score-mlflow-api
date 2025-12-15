@@ -5,16 +5,6 @@ const nextConfig: NextConfig = {
   // Enable standalone output for Docker
   output: "standalone",
 
-  // Ensure webpack can resolve "@/..." aliases (for Docker/CI builds)
-  webpack(config) {
-    config.resolve = config.resolve || {};
-    config.resolve.alias = {
-      ...(config.resolve.alias || {}),
-      "@": path.resolve(__dirname, "src"),
-    };
-    return config;
-  },
-
   // Proxy API requests to FastAPI backend during development
   async rewrites() {
     return [
