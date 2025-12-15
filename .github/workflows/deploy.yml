@@ -156,6 +156,12 @@ jobs:
             
             echo "🚀 Starting deployment with tag: ${IMAGE_TAG}"
             echo "   (Images were built by CI on dev branch)"
+
+            # Source environment variables for docker compose interpolation
+            # This makes GOOGLE_GENERATIVE_AI_API_KEY and SESSION_SECRET available
+            set -a
+            source /home/ubuntu/.env.credit-score
+            set +a
             
             # Login to GHCR
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
@@ -211,45 +217,50 @@ jobs:
             echo "📍 Deployed tag: ${IMAGE_TAG}"
 
       - name: Health check
+        uses: appleboy/ssh-action@v1.2.0
         if: ${{ github.event.inputs.skip_health_check != 'true' }}
-        run: |
-          echo "⏳ Waiting for services to start..."
-          sleep 30
-          
-          echo "🔍 Running health checks..."
-          
-          FAILED=false
-          
-          # Check API health
-          API_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.DEPLOY_HOST }}:8000/health || echo "000")
-          if [ "$API_STATUS" == "200" ]; then
-            echo "✅ API is healthy (HTTP $API_STATUS)"
-          else
-            echo "⚠️ API health check returned HTTP $API_STATUS"
-            FAILED=true
-          fi
-          
-          # Check UI health
-          UI_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.DEPLOY_HOST }}:3000 || echo "000")
-          if [ "$UI_STATUS" == "200" ]; then
-            echo "✅ UI is healthy (HTTP $UI_STATUS)"
-          else
-            echo "⚠️ UI health check returned HTTP $UI_STATUS"
-            FAILED=true
-          fi
-          
-          if [ "$FAILED" == "true" ]; then
-            echo ""
-            echo "❌ Health checks failed! Fetching container logs..."
-            echo "==================================================="
-            echo ">>> API Logs (last 50 lines):"
-            docker compose -f docker-compose.deploy.yml logs --tail=50 api
-            echo ""
-            echo ">>> UI Logs (last 50 lines):"
-            docker compose -f docker-compose.deploy.yml logs --tail=50 ui
-            echo "==================================================="
-            exit 1
-          fi
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER || 'ubuntu' }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            echo "⏳ Waiting for services to start..."
+            sleep 30
+            
+            echo "🔍 Running health checks..."
+            
+            FAILED=false
+            
+            # Check API health
+            API_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/health || echo "000")
+            if [ "$API_STATUS" == "200" ]; then
+              echo "✅ API is healthy (HTTP $API_STATUS)"
+            else
+              echo "⚠️ API health check returned HTTP $API_STATUS"
+              FAILED=true
+            fi
+            
+            # Check UI health
+            UI_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 || echo "000")
+            if [ "$UI_STATUS" == "200" ]; then
+              echo "✅ UI is healthy (HTTP $UI_STATUS)"
+            else
+              echo "⚠️ UI health check returned HTTP $UI_STATUS"
+              FAILED=true
+            fi
+            
+            if [ "$FAILED" == "true" ]; then
+              echo ""
+              echo "❌ Health checks failed! Fetching container logs..."
+              echo "==================================================="
+              echo ">>> API Logs (last 50 lines):"
+              docker compose -f docker-compose.deploy.yml logs --tail=50 api
+              echo ""
+              echo ">>> UI Logs (last 50 lines):"
+              docker compose -f docker-compose.deploy.yml logs --tail=50 ui
+              echo "==================================================="
+              exit 1
+            fi
 
       - name: Deployment summary
         run: |
