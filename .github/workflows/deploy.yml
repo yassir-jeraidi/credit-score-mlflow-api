@@ -154,6 +154,10 @@ jobs:
           script: |
             set -e
             
+            echo "🧹 Cleaning up disk space..."
+            # Aggressively clean up unused images, containers, and networks to free space
+            docker system prune -af --volumes=false
+            
             echo "🚀 Starting deployment with tag: ${IMAGE_TAG}"
             echo "   (Images were built by CI on dev branch)"
 
@@ -183,17 +187,43 @@ jobs:
                   timeout: 5s
                   retries: 5
 
+              mlflow:
+                image: python:3.11-slim
+                restart: always
+                depends_on:
+                  db:
+                    condition: service_healthy
+                environment:
+                  MLFLOW_BACKEND_STORE_URI: postgresql://\${POSTGRES_USER}:\${POSTGRES_PASSWORD}@db:5432/\${POSTGRES_DB}
+                  MLFLOW_ARTIFACT_ROOT: /mlflow/artifacts
+                volumes:
+                  - mlflow_artifacts:/mlflow/artifacts
+                command: >
+                  bash -c "pip install 'mlflow<2.10' psycopg2-binary && 
+                  mlflow server --backend-store-uri postgresql://\${POSTGRES_USER}:\${POSTGRES_PASSWORD}@db:5432/\${POSTGRES_DB} 
+                  --default-artifact-root /mlflow/artifacts 
+                  --host 0.0.0.0 --port 5001"
+                healthcheck:
+                  test: ["CMD", "curl", "-f", "http://localhost:5001/api/2.0/mlflow/experiments/search?max_results=1"]
+                  interval: 30s
+                  timeout: 10s
+                  retries: 5
+                  start_period: 30s
+
               api:
                 image: ghcr.io/${{ github.repository }}:${IMAGE_TAG}-api
                 env_file:
                   - /home/ubuntu/.env.credit-score
                 environment:
                   - POSTGRES_HOST=db
+                  - MLFLOW_TRACKING_URI=http://mlflow:5001
                 ports:
                   - "8000:8000"
                 restart: unless-stopped
                 depends_on:
                   db:
+                    condition: service_healthy
+                  mlflow:
                     condition: service_healthy
                 healthcheck:
                   test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -217,6 +247,7 @@ jobs:
 
             volumes:
               postgres_data:
+              mlflow_artifacts:
 
             networks:
               default:
