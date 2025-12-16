@@ -1,0 +1,29 @@
+I want to apply for a personal loan. Here's my complete information:
+
+Age: 22 years old
+Annual income: $18,000
+Employment length: 0 years
+Home ownership: RENT
+Loan amount requested: $35,000
+Loan purpose: VENTURE
+Credit history length: 1 year
+Number of credit lines: 1
+Derogatory marks: 3
+Total existing debt: $12,000
+Can you analyze my credit application?
+
+
+
+I want to apply for a personal loan. Here's my information:
+- Age: 35 years old
+- Annual income: $75,000
+- Employment: 8 years at my current job
+- Loan amount: $20,000
+- Purpose: Personal loan
+- Home ownership: I have a mortgage
+- Credit history: 12 years
+- Credit accounts: 5 credit lines
+- Derogatory marks: 0
+- Total debt: $15,000
+
+Can you analyze my credit application?
