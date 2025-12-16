@@ -117,6 +117,10 @@ jobs:
               exit 1
             fi
             
+            # Prune to free space for swap file if needed
+            echo "🧹 Cleaning up disk space before verification..."
+            docker system prune -af --volumes=false
+            
             DOCKER_VERSION=$(docker --version)
             echo "✅ Docker installed: $DOCKER_VERSION"
             
