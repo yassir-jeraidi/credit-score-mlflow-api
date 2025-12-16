@@ -139,6 +139,19 @@ jobs:
             fi
             echo "✅ Docker daemon is running"
             
+            # Check and create Swap (crucial for t2.micro)
+            if [ $(swapon --show | wc -l) -eq 0 ]; then
+              echo "⚠️ No swap detected. Creating 2GB swap file..."
+              sudo fallocate -l 2G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048
+              sudo chmod 600 /swapfile
+              sudo mkswap /swapfile
+              sudo swapon /swapfile
+              echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+              echo "✅ Swap created and enabled!"
+            else
+              echo "✅ Swap already exists."
+            fi
+            
             echo ""
             echo "🎉 All Docker prerequisites verified!"
 
@@ -219,7 +232,7 @@ jobs:
               # MLflow Tracking Server
               # =================================================================
               mlflow:
-                image: python:3.11-slim
+                image: ghcr.io/${{ github.repository }}:${IMAGE_TAG}-mlflow
                 restart: always
                 container_name: credit-score-mlflow
                 depends_on:
@@ -231,17 +244,15 @@ jobs:
                 volumes:
                   - mlflow_artifacts:/mlflow/artifacts
                 command: >
-                  bash -c "apt-get update && apt-get install -y curl && 
-                  pip install 'mlflow<2.10' psycopg2-binary && 
                   mlflow server --backend-store-uri postgresql://\${POSTGRES_USER}:\${POSTGRES_PASSWORD}@postgres:5432/\${POSTGRES_DB} 
                   --default-artifact-root /mlflow/artifacts 
-                  --host 0.0.0.0 --port 5001"
+                  --host 0.0.0.0 --port 5001
                 healthcheck:
                   test: ["CMD", "curl", "-f", "http://localhost:5001/api/2.0/mlflow/experiments/search?max_results=1"]
                   interval: 30s
                   timeout: 10s
                   retries: 10
-                  start_period: 90s
+                  start_period: 30s
                 networks:
                   - credit-score-network
 
