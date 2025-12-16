@@ -1,14 +1,14 @@
 name: CI - Build, Test & Push
 
 on:
-  # CI runs on dev branch and feature branches
+  # CI runs on main, dev, and feature branches
   push:
-    branches: [dev, feature/*]
+    branches: [main, dev, feature/*]
     tags:
       - "v*"
-  # CI runs on PRs targeting dev
+  # CI runs on PRs targeting dev and main
   pull_request:
-    branches: [dev]
+    branches: [dev, main]
   workflow_dispatch:
     inputs:
       push_images:

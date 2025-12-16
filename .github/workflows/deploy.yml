@@ -2,10 +2,10 @@ name: CD - Deploy to AWS
 
 on:
   # CD runs on push to main (after PR merge from dev)
-  push:
-    branches: [main]
-  # CD runs on PRs targeting main (deploy for testing)
-  pull_request:
+  # CD runs on successful CI completion on main branch
+  workflow_run:
+    workflows: ["CI - Build, Test & Push"]
+    types: [completed]
     branches: [main]
   # Manual deployment with specific image tag (for rollback)
   workflow_dispatch:
@@ -44,16 +44,16 @@ jobs:
             # Manual deployment - use provided tag
             echo "tag=${{ github.event.inputs.image_tag }}" >> $GITHUB_OUTPUT
             echo "🔖 Using manual tag: ${{ github.event.inputs.image_tag }}"
-          elif [ "${{ github.event_name }}" == "pull_request" ]; then
-            # PR - use the PR head SHA (same as dev branch commit)
-            SHORT_SHA=$(echo "${{ github.event.pull_request.head.sha }}" | cut -c1-7)
+          elif [ "${{ github.event_name }}" == "workflow_run" ]; then
+            # Workflow Run (triggered by CI) - use the SHA that triggered CI
+            SHORT_SHA=$(echo "${{ github.event.workflow_run.head_sha }}" | cut -c1-7)
             echo "tag=sha-${SHORT_SHA}" >> $GITHUB_OUTPUT
-            echo "🔖 Using PR head SHA tag: sha-${SHORT_SHA}"
+            echo "🔖 Using CI trigger SHA tag: sha-${SHORT_SHA}"
           else
-            # Push to main - use current commit SHA
+            # Fallback
             SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
             echo "tag=sha-${SHORT_SHA}" >> $GITHUB_OUTPUT
-            echo "🔖 Using SHA tag: sha-${SHORT_SHA}"
+            echo "🔖 Using current SHA tag: sha-${SHORT_SHA}"
           fi
 
       - name: Log in to GitHub Container Registry
