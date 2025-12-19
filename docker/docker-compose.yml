@@ -27,10 +27,13 @@ services:
     restart: unless-stopped
 
   # ==========================================================================
-  # MLflow Tracking Server
+  # MLflow Tracking Server (Optimized Multi-Stage Build)
   # ==========================================================================
   mlflow:
-    image: python:3.11-slim
+    build:
+      context: ..
+      dockerfile: docker/mlflow.Dockerfile
+    image: credit-score-mlflow:latest
     container_name: credit-score-mlflow
     depends_on:
       postgres:
@@ -38,16 +41,12 @@ services:
     environment:
       MLFLOW_BACKEND_STORE_URI: postgresql://${POSTGRES_USER:-mlflow}:${POSTGRES_PASSWORD:-mlflow123}@postgres:5432/${POSTGRES_DB:-mlflow}
       MLFLOW_ARTIFACT_ROOT: /mlflow/artifacts
+      MLFLOW_HOST: "0.0.0.0"
+      MLFLOW_PORT: "5001"
     volumes:
       - mlflow_artifacts:/mlflow/artifacts
     ports:
       - "5001:5001"
-    command:
-      [
-        "bash",
-        "-c",
-        "apt-get update && apt-get install -y curl && pip install 'mlflow<2.10' psycopg2-binary && mlflow server --backend-store-uri postgresql://mlflow:mlflow123@postgres:5432/mlflow --default-artifact-root /mlflow/artifacts --host 0.0.0.0 --port 5001",
-      ]
     healthcheck:
       test:
         [
@@ -57,7 +56,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 10
-      start_period: 90s
+      start_period: 60s
     networks:
       - credit-score-network
     restart: unless-stopped
@@ -67,8 +66,8 @@ services:
   # ==========================================================================
   api:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/api.Dockerfile
     container_name: credit-score-api
     user: root
     depends_on:
@@ -92,7 +91,7 @@ services:
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
 
     volumes:
-      - .:/app
+      - ..:/app
       - mlflow_artifacts:/mlflow/artifacts
       - credit_data:/app/data
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
@@ -116,10 +115,10 @@ services:
     image: prom/prometheus:v2.48.0
     container_name: credit-score-prometheus
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     ports:
-      - "9090:9090"
+      - "9091:9090"
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
@@ -136,23 +135,46 @@ services:
     restart: unless-stopped
 
   # ==========================================================================
+  # Grafana Dashboard
+  # ==========================================================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: credit-score-grafana
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ../grafana/provisioning:/etc/grafana/provisioning
+    ports:
+      - "9090:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    networks:
+      - credit-score-network
+    restart: unless-stopped
+
+  # ==========================================================================
   # Next.js UI
   # ==========================================================================
   ui:
     build:
-      context: ./ui
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/ui.Dockerfile
       args:
         API_BASE_URL: http://api:8000
         NEXT_PUBLIC_API_URL: http://localhost:8000
     container_name: credit-score-ui
+    env_file:
+      - ../.env
     depends_on:
       api:
         condition: service_healthy
     environment:
       API_BASE_URL: http://api:8000
       NEXT_PUBLIC_API_URL: http://localhost:8000
-      GOOGLE_GENERATIVE_AI_API_KEY: ${GOOGLE_GENERATIVE_AI_API_KEY}
       SESSION_SECRET: ${SESSION_SECRET:-ensetmlopssecret-version2025}
     ports:
       - "3000:3000"
@@ -171,8 +193,8 @@ services:
   # ==========================================================================
   train:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/api.Dockerfile
     container_name: credit-score-train
     user: root
     environment:
@@ -188,10 +210,7 @@ services:
       bash -c "
         echo 'Pulling data from DVC...' &&
         dvc pull || echo 'DVC pull skipped or failed, will generate data' &&
-        python -m ml.train 
-          --mlflow-uri http://mlflow:5001 
-          --register 
-          --promote
+        python -m ml.train --mlflow-uri http://mlflow:5001 --register --promote
       "
     depends_on:
       mlflow:
@@ -206,8 +225,8 @@ services:
   # ==========================================================================
   generate-data:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/api.Dockerfile
     container_name: credit-score-generate-data
     user: root
     environment:
@@ -243,4 +262,5 @@ volumes:
   postgres_data:
   mlflow_artifacts:
   prometheus_data:
+  grafana_data:
   credit_data:
