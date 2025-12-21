@@ -3,40 +3,43 @@ Model Training Script with MLflow Integration.
 
 Trains a credit scoring model and logs everything to MLflow.
 """
-import os
+
 import logging
-from datetime import datetime
-from typing import Dict, Any, Optional
+import os
+from typing import Any, Dict, Optional
 
 import mlflow
 import mlflow.sklearn
 import pandas as pd
-import numpy as np
-from sklearn.ensemble import GradientBoostingClassifier
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
+from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.metrics import (
     accuracy_score,
+    classification_report,
+    confusion_matrix,
+    f1_score,
     precision_score,
     recall_score,
-    f1_score,
     roc_auc_score,
-    confusion_matrix,
-    classification_report,
 )
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from ml.config import (
-    NUMERICAL_FEATURES,
     CATEGORICAL_FEATURES,
     DEFAULT_MODEL_PARAMS,
+    DEFAULT_SAMPLE_SIZE,
     MLFLOW_EXPERIMENT_NAME,
     MODEL_NAME,
-    DEFAULT_SAMPLE_SIZE,
+    NUMERICAL_FEATURES,
     TEST_SIZE,
-    RANDOM_STATE,
 )
-from ml.data_generator import generate_credit_data, split_data, load_from_csv, generate_and_save_data, RAW_DATA_PATH
+from ml.data_generator import (
+    RAW_DATA_PATH,
+    generate_and_save_data,
+    load_from_csv,
+    split_data,
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -53,9 +56,7 @@ def create_preprocessing_pipeline() -> ColumnTransformer:
     numerical_transformer = StandardScaler()
 
     categorical_transformer = OneHotEncoder(
-        drop="first",
-        sparse_output=False,
-        handle_unknown="ignore"
+        drop="first", sparse_output=False, handle_unknown="ignore"
     )
 
     preprocessor = ColumnTransformer(
@@ -63,15 +64,13 @@ def create_preprocessing_pipeline() -> ColumnTransformer:
             ("num", numerical_transformer, NUMERICAL_FEATURES),
             ("cat", categorical_transformer, CATEGORICAL_FEATURES),
         ],
-        remainder="drop"
+        remainder="drop",
     )
 
     return preprocessor
 
 
-def create_model_pipeline(
-    model_params: Optional[Dict[str, Any]] = None
-) -> Pipeline:
+def create_model_pipeline(model_params: Optional[Dict[str, Any]] = None) -> Pipeline:
     """
     Create full model pipeline with preprocessing and classifier.
 
@@ -87,19 +86,17 @@ def create_model_pipeline(
     preprocessor = create_preprocessing_pipeline()
     classifier = GradientBoostingClassifier(**model_params)
 
-    pipeline = Pipeline([
-        ("preprocessor", preprocessor),
-        ("classifier", classifier),
-    ])
+    pipeline = Pipeline(
+        [
+            ("preprocessor", preprocessor),
+            ("classifier", classifier),
+        ]
+    )
 
     return pipeline
 
 
-def evaluate_model(
-    model: Pipeline,
-    X_test: pd.DataFrame,
-    y_test: pd.Series
-) -> Dict[str, float]:
+def evaluate_model(model: Pipeline, X_test: pd.DataFrame, y_test: pd.Series) -> Dict[str, float]:
     """
     Evaluate model performance.
 
@@ -171,7 +168,7 @@ def train_model(
             logger.warning(f"Data file not found at {data_file}. Generating new data...")
             df, saved_path = generate_and_save_data(n_samples=n_samples)
             logger.info(f"Data saved to {saved_path}")
-    
+
     X_train, X_test, y_train, y_test = split_data(df, test_size=TEST_SIZE)
 
     logger.info(f"Training data shape: {X_train.shape}")
@@ -205,32 +202,24 @@ def train_model(
         # Log confusion matrix
         y_pred = model.predict(X_test)
         cm = confusion_matrix(y_test, y_pred)
-        mlflow.log_text(
-            str(cm),
-            "confusion_matrix.txt"
-        )
+        mlflow.log_text(str(cm), "confusion_matrix.txt")
 
         # Log classification report
         report = classification_report(y_test, y_pred)
         mlflow.log_text(report, "classification_report.txt")
 
         # Log feature importances
-        feature_names = (
-            NUMERICAL_FEATURES +
-            list(model.named_steps["preprocessor"]
-                 .named_transformers_["cat"]
-                 .get_feature_names_out(CATEGORICAL_FEATURES))
+        feature_names = NUMERICAL_FEATURES + list(
+            model.named_steps["preprocessor"]
+            .named_transformers_["cat"]
+            .get_feature_names_out(CATEGORICAL_FEATURES)
         )
         importances = model.named_steps["classifier"].feature_importances_
-        importance_df = pd.DataFrame({
-            "feature": feature_names,
-            "importance": importances
-        }).sort_values("importance", ascending=False)
+        importance_df = pd.DataFrame(
+            {"feature": feature_names, "importance": importances}
+        ).sort_values("importance", ascending=False)
 
-        mlflow.log_text(
-            importance_df.to_string(),
-            "feature_importances.txt"
-        )
+        mlflow.log_text(importance_df.to_string(), "feature_importances.txt")
 
         # Log model
         logger.info("Logging model to MLflow...")
@@ -243,9 +232,104 @@ def train_model(
         # Log dataset info
         mlflow.log_param("target_distribution", df["target"].value_counts().to_dict())
 
+        # Save plots and metrics history
+        try:
+            save_plots(model, X_test, y_test, X_train, y_train, run_id)
+        except Exception as e:
+            logger.warning(f"Failed to generate plots: {e}")
+
         logger.info(f"Model training complete. Run ID: {run_id}")
 
         return run_id
+
+
+def save_plots(
+    model: Pipeline,
+    X_test: pd.DataFrame,
+    y_test: pd.Series,
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    run_id: str,
+) -> None:
+    """
+    Generate and save training plots (confusion matrix, learning curves).
+    
+    Args:
+        model: Trained model pipeline
+        X_test: Test features
+        y_test: Test labels
+        X_train: Train features
+        y_train: Train labels
+        run_id: MLflow run ID
+    """
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    from sklearn.metrics import accuracy_score, f1_score, log_loss
+
+    # 1. Confusion Matrix
+    plt.figure(figsize=(8, 6))
+    y_pred = model.predict(X_test)
+    cm = confusion_matrix(y_test, y_pred)
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", cbar=False)
+    plt.title("Confusion Matrix")
+    plt.ylabel("True Label")
+    plt.xlabel("Predicted Label")
+    plt.tight_layout()
+    plt.savefig("confusion_matrix.png")
+    plt.close()
+    
+    # 2. Learning Curves (Loss, Accuracy, F1)
+    # Get classifier and preprocessor
+    clf = model.named_steps["classifier"]
+    preprocessor = model.named_steps["preprocessor"]
+    
+    # Transform data
+    X_train_trans = preprocessor.transform(X_train)
+    X_test_trans = preprocessor.transform(X_test)
+    
+    # Initialize history buffers
+    train_loss = list(clf.train_score_)
+    test_loss = []
+    train_acc = []
+    test_acc = []
+    train_f1 = []
+    test_f1 = []
+    
+    # Calculate metrics for each boosting stage
+    # Note: calculating full train metrics per stage can be slow for large datasets
+    # limiting to chunks or subsets might be wise, but for verification it's fine.
+    
+    # Test Metrics per stage
+    for i, y_pred in enumerate(clf.staged_predict(X_test_trans)):
+        test_acc.append(accuracy_score(y_test, y_pred))
+        test_f1.append(f1_score(y_test, y_pred))
+        
+    for i, y_proba in enumerate(clf.staged_predict_proba(X_test_trans)):
+        test_loss.append(log_loss(y_test, y_proba))
+
+    # Train Metrics per stage (Acc/F1 - Loss is already in train_score_)
+    for i, y_pred in enumerate(clf.staged_predict(X_train_trans)):
+        train_acc.append(accuracy_score(y_train, y_pred))
+        train_f1.append(f1_score(y_train, y_pred))
+
+    # Save history to CSV
+    history_df = pd.DataFrame({
+        "stage": range(len(train_loss)),
+        "train_loss": train_loss,
+        "test_loss": test_loss,
+        "train_accuracy": train_acc,
+        "test_accuracy": test_acc,
+        "train_f1": train_f1,
+        "test_f1": test_f1
+    })
+    history_df.to_csv("training_history.csv", index=False)
+    
+    # Log artifacts to MLflow
+    mlflow.log_artifact("confusion_matrix.png")
+    mlflow.log_artifact("training_history.csv")
+    
+    print(f"Saved plots and history for run {run_id}")
+
 
 
 def get_latest_model_version(
@@ -320,35 +404,28 @@ if __name__ == "__main__":
         "--n-samples",
         type=int,
         default=DEFAULT_SAMPLE_SIZE,
-        help="Number of training samples (used when generating new data)"
+        help="Number of training samples (used when generating new data)",
     )
     parser.add_argument(
         "--mlflow-uri",
         type=str,
         default=os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000"),
-        help="MLflow tracking URI"
+        help="MLflow tracking URI",
     )
     parser.add_argument(
-        "--register",
-        action="store_true",
-        default=True,
-        help="Register model in MLflow Registry"
+        "--register", action="store_true", default=True, help="Register model in MLflow Registry"
     )
     parser.add_argument(
-        "--promote",
-        action="store_true",
-        help="Promote model to Production after training"
+        "--promote", action="store_true", help="Promote model to Production after training"
     )
     parser.add_argument(
         "--data-path",
         type=str,
         default=None,
-        help="Path to CSV data file (uses default data/raw/credit_data.csv if not specified)"
+        help="Path to CSV data file (uses default data/raw/credit_data.csv if not specified)",
     )
     parser.add_argument(
-        "--generate-data",
-        action="store_true",
-        help="Generate new data instead of loading from CSV"
+        "--generate-data", action="store_true", help="Generate new data instead of loading from CSV"
     )
 
     args = parser.parse_args()
