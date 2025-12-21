@@ -15,15 +15,15 @@ Can you analyze my credit application?
 
 
 I want to apply for a personal loan. Here's my information:
-- Age: 35 years old
-- Annual income: $75,000
-- Employment: 8 years at my current job
-- Loan amount: $20,000
-- Purpose: Personal loan
-- Home ownership: I have a mortgage
-- Credit history: 12 years
-- Credit accounts: 5 credit lines
-- Derogatory marks: 0
-- Total debt: $15,000
+Age: 35 years old
+Annual income: $75,000
+Employment: 8 years at my current job
+Loan amount: $20,000
+Purpose: Personal loan
+Home ownership: I have a mortgage
+Credit history: 12 years
+Credit accounts: 5 credit lines
+Derogatory marks: 0
+Total debt: $15,000
 
 Can you analyze my credit application?
