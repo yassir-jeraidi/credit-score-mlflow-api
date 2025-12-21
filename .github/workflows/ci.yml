@@ -308,19 +308,31 @@ jobs:
     steps:
       - name: Check build status
         run: |
-          if [ "${{ needs.build-api.result }}" == "success" ] && [ "${{ needs.build-ui.result }}" == "success" ] && [ "${{ needs.build-mlflow.result }}" == "success" ]; then
-            echo "✅ All builds succeeded!"
-            echo ""
-            echo "📦 Images pushed to GHCR:"
-            echo "  API:    ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}-api"
-            echo "  UI:     ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}-ui"
-            echo "  MLflow: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}-mlflow"
-            echo ""
-            echo "🔖 Short SHA: ${{ needs.build-api.outputs.short-sha }}"
+          API_RESULT="${{ needs.build-api.result }}"
+          UI_RESULT="${{ needs.build-ui.result }}"
+          MLFLOW_RESULT="${{ needs.build-mlflow.result }}"
+
+          echo "Build Results:"
+          echo "  API:    $API_RESULT"
+          echo "  UI:     $UI_RESULT"
+          echo "  MLflow: $MLFLOW_RESULT"
+          echo ""
+
+          # Check if all builds succeeded or were skipped (skipped is OK for PRs)
+          check_result() {
+            [ "$1" == "success" ] || [ "$1" == "skipped" ]
+          }
+
+          if check_result "$API_RESULT" && check_result "$UI_RESULT" && check_result "$MLFLOW_RESULT"; then
+            echo "✅ All builds completed successfully (or skipped as expected)!"
+            if [ "$API_RESULT" == "success" ]; then
+              echo ""
+              echo "📦 Images pushed to GHCR:"
+              echo "  API:    ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}-api"
+              echo "  UI:     ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}-ui"
+              echo "  MLflow: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}-mlflow"
+            fi
           else
             echo "❌ Some builds failed"
-            echo "  API:    ${{ needs.build-api.result }}"
-            echo "  UI:     ${{ needs.build-ui.result }}"
-            echo "  MLflow: ${{ needs.build-mlflow.result }}"
             exit 1
           fi

@@ -7,7 +7,7 @@ Provides shared fixtures for testing the Credit Score API.
 import os
 import sys
 from typing import Any, Dict, Generator
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -15,9 +15,9 @@ from fastapi.testclient import TestClient
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app import security
-from app.main import app
-from app.schemas import CreditApplication
+# These imports must come after path modification
+from app import security  # noqa: E402
+from app.main import app  # noqa: E402
 
 
 @pytest.fixture

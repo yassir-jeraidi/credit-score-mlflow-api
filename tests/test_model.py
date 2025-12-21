@@ -6,7 +6,6 @@ Tests for data generation, model training, and prediction utilities.
 
 import os
 import sys
-from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
@@ -14,15 +13,18 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ml.config import (
+# These imports must come after path modification
+from ml.config import (  # noqa: E402
     ALL_FEATURES,
-    CATEGORICAL_FEATURES,
     HOME_OWNERSHIP_CATEGORIES,
     LOAN_INTENT_CATEGORIES,
-    NUMERICAL_FEATURES,
 )
-from ml.data_generator import _generate_target, generate_credit_data, split_data
-from ml.train import create_model_pipeline, create_preprocessing_pipeline, evaluate_model
+from ml.data_generator import generate_credit_data, split_data  # noqa: E402
+from ml.train import (  # noqa: E402
+    create_model_pipeline,
+    create_preprocessing_pipeline,
+    evaluate_model,
+)
 
 
 class TestDataGenerator:

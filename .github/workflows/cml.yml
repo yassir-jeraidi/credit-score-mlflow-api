@@ -235,7 +235,6 @@ jobs:
           "
 
       - name: Setup CML
-        if: github.event_name == 'pull_request'
         uses: iterative/setup-cml@v2
 
       - name: Generate Training Plots
@@ -289,7 +288,6 @@ jobs:
           PYCODE
 
       - name: Generate CML Report
-        if: github.event_name == 'pull_request'
         env:
           REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

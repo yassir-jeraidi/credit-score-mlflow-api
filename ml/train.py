@@ -253,7 +253,7 @@ def save_plots(
 ) -> None:
     """
     Generate and save training plots (confusion matrix, learning curves).
-    
+
     Args:
         model: Trained model pipeline
         X_test: Test features
@@ -277,16 +277,16 @@ def save_plots(
     plt.tight_layout()
     plt.savefig("confusion_matrix.png")
     plt.close()
-    
+
     # 2. Learning Curves (Loss, Accuracy, F1)
     # Get classifier and preprocessor
     clf = model.named_steps["classifier"]
     preprocessor = model.named_steps["preprocessor"]
-    
+
     # Transform data
     X_train_trans = preprocessor.transform(X_train)
     X_test_trans = preprocessor.transform(X_test)
-    
+
     # Initialize history buffers
     train_loss = list(clf.train_score_)
     test_loss = []
@@ -294,16 +294,16 @@ def save_plots(
     test_acc = []
     train_f1 = []
     test_f1 = []
-    
+
     # Calculate metrics for each boosting stage
     # Note: calculating full train metrics per stage can be slow for large datasets
     # limiting to chunks or subsets might be wise, but for verification it's fine.
-    
+
     # Test Metrics per stage
     for i, y_pred in enumerate(clf.staged_predict(X_test_trans)):
         test_acc.append(accuracy_score(y_test, y_pred))
         test_f1.append(f1_score(y_test, y_pred))
-        
+
     for i, y_proba in enumerate(clf.staged_predict_proba(X_test_trans)):
         test_loss.append(log_loss(y_test, y_proba))
 
@@ -313,23 +313,24 @@ def save_plots(
         train_f1.append(f1_score(y_train, y_pred))
 
     # Save history to CSV
-    history_df = pd.DataFrame({
-        "stage": range(len(train_loss)),
-        "train_loss": train_loss,
-        "test_loss": test_loss,
-        "train_accuracy": train_acc,
-        "test_accuracy": test_acc,
-        "train_f1": train_f1,
-        "test_f1": test_f1
-    })
+    history_df = pd.DataFrame(
+        {
+            "stage": range(len(train_loss)),
+            "train_loss": train_loss,
+            "test_loss": test_loss,
+            "train_accuracy": train_acc,
+            "test_accuracy": test_acc,
+            "train_f1": train_f1,
+            "test_f1": test_f1,
+        }
+    )
     history_df.to_csv("training_history.csv", index=False)
-    
+
     # Log artifacts to MLflow
     mlflow.log_artifact("confusion_matrix.png")
     mlflow.log_artifact("training_history.csv")
-    
-    print(f"Saved plots and history for run {run_id}")
 
+    print(f"Saved plots and history for run {run_id}")
 
 
 def get_latest_model_version(
