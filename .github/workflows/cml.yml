@@ -290,11 +290,10 @@ jobs:
       - name: Generate CML Report
         env:
           REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SAMPLES: ${{ steps.samples.outputs.n_samples }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+          SHA: ${{ github.sha }}
         run: |
-          SAMPLES="${{ steps.samples.outputs.n_samples }}"
-          BRANCH="${{ github.head_ref || github.ref_name }}"
-          SHA="${{ github.sha }}"
-
           python - <<'PYCODE'
           import json
           import os
