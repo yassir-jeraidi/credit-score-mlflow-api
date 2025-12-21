@@ -69,9 +69,16 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-      - name: Pull data from DVC (if available)
+      - name: Pull data from DVC
+        id: dvc_pull
         run: |
-          dvc pull || echo "DVC pull failed or no data cached, will generate fresh data"
+          if dvc pull; then
+            echo "dvc_success=true" >> $GITHUB_OUTPUT
+            echo "✅ Successfully pulled data from DVC"
+          else
+            echo "dvc_success=false" >> $GITHUB_OUTPUT
+            echo "⚠️ DVC pull failed, will generate fresh data"
+          fi
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -88,10 +95,14 @@ jobs:
             echo "n_samples=1000" >> $GITHUB_OUTPUT
           fi
 
-      - name: Generate test data
+      - name: Generate data (fallback if DVC pull failed)
+        if: steps.dvc_pull.outputs.dvc_success != 'true'
         run: |
+          echo "Generating ${{ steps.samples.outputs.n_samples }} samples as fallback..."
           python -m ml.data_generator --n-samples ${{ steps.samples.outputs.n_samples }} --seed 42
-          echo "Generated ${{ steps.samples.outputs.n_samples }} samples for training verification"
+          echo "Generated ${{ steps.samples.outputs.n_samples }} samples for training"
+        env:
+          PYTHONPATH: .
 
       - name: Run training verification
         id: train
@@ -99,18 +110,20 @@ jobs:
           # Create a local MLflow tracking directory
           mkdir -p mlruns
 
-          # Run training with local MLflow
+          # Run training with local MLflow and generate plots data
           python -c "
           import sys
           sys.path.insert(0, '.')
-          from ml.train import train_model, create_model_pipeline, evaluate_model
+          from ml.train import create_model_pipeline, evaluate_model
           from ml.data_generator import load_from_csv, split_data
           from ml.config import TEST_SIZE, DEFAULT_MODEL_PARAMS
-          import mlflow
+          from sklearn.metrics import confusion_matrix, accuracy_score, f1_score, log_loss
+          import matplotlib
+          matplotlib.use('Agg')
+          import matplotlib.pyplot as plt
+          import seaborn as sns
+          import pandas as pd
           import json
-
-          # Use local file-based MLflow tracking
-          mlflow.set_tracking_uri('file:./mlruns')
 
           # Load data
           df = load_from_csv()
@@ -135,7 +148,56 @@ jobs:
           with open('metrics.json', 'w') as f:
               json.dump(metrics, f, indent=2)
 
-          print('\\n✅ Training verification completed successfully!')
+          # Generate Confusion Matrix
+          y_pred = model.predict(X_test)
+          cm = confusion_matrix(y_test, y_pred)
+          plt.figure(figsize=(8, 6))
+          sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=False)
+          plt.title('Confusion Matrix')
+          plt.ylabel('True Label')
+          plt.xlabel('Predicted Label')
+          plt.tight_layout()
+          plt.savefig('confusion_matrix.png')
+          plt.close()
+
+          # Generate Training History (Learning Curves)
+          clf = model.named_steps['classifier']
+          preprocessor = model.named_steps['preprocessor']
+          X_train_trans = preprocessor.transform(X_train)
+          X_test_trans = preprocessor.transform(X_test)
+
+          # Collect metrics per boosting stage
+          train_loss = list(clf.train_score_)
+          test_loss = []
+          train_acc = []
+          test_acc = []
+          train_f1 = []
+          test_f1 = []
+
+          for y_pred_stage in clf.staged_predict(X_test_trans):
+              test_acc.append(accuracy_score(y_test, y_pred_stage))
+              test_f1.append(f1_score(y_test, y_pred_stage))
+
+          for y_proba_stage in clf.staged_predict_proba(X_test_trans):
+              test_loss.append(log_loss(y_test, y_proba_stage))
+
+          for y_pred_stage in clf.staged_predict(X_train_trans):
+              train_acc.append(accuracy_score(y_train, y_pred_stage))
+              train_f1.append(f1_score(y_train, y_pred_stage))
+
+          # Save history
+          history_df = pd.DataFrame({
+              'stage': range(len(train_loss)),
+              'train_loss': train_loss,
+              'test_loss': test_loss,
+              'train_accuracy': train_acc,
+              'test_accuracy': test_acc,
+              'train_f1': train_f1,
+              'test_f1': test_f1
+          })
+          history_df.to_csv('training_history.csv', index=False)
+
+          print('\\n✅ Training verification and plots generation completed!')
           "
         env:
           PYTHONPATH: .
@@ -262,35 +324,38 @@ jobs:
               "",
               "### 📈 Model Performance",
               "",
-              "Metric | Value",
-              ":--- | ---:",
-              f"Accuracy | {fmt('accuracy')}",
-              f"Precision | {fmt('precision')}",
-              f"Recall | {fmt('recall')}",
-              f"F1-score | {fmt('f1_score')}",
-              f"ROC AUC | {fmt('roc_auc')}",
+              "| Metric | Value |",
+              "|:--- | ---:|",
+              f"| Accuracy | {fmt('accuracy')} |",
+              f"| Precision | {fmt('precision')} |",
+              f"| Recall | {fmt('recall')} |",
+              f"| F1-score | {fmt('f1_score')} |",
+              f"| ROC AUC | {fmt('roc_auc')} |",
               "",
               "### ✅ Training Status",
               "",
               "Training verification completed successfully.",
               "",
+              "### 📊 Training Visualizations",
+              "",
+              "#### Loss Evolution (Train vs Test)",
+              "![Loss](./loss_graph.png)",
+              "",
+              "#### Accuracy Evolution (Train vs Test)",
+              "![Accuracy](./accuracy_graph.png)",
+              "",
+              "#### F1 Score Evolution (Train vs Test)",
+              "![F1 Score](./f1_graph.png)",
+              "",
+              "#### Confusion Matrix",
+              "![Confusion Matrix](./confusion_matrix.png)",
+              "",
+              "---",
+              f"*Generated by CML*",
           ]
 
           Path("report.md").write_text("\n".join(lines))
           PYCODE
-
-          # Add visualizations
-          echo "### 📊 Training Visualizations" >> report.md
-          echo "" >> report.md
-
-          cml publish loss_graph.png --md --title 'Loss Evolution' >> report.md
-          cml publish accuracy_graph.png --md --title 'Accuracy Evolution' >> report.md
-          cml publish f1_graph.png --md --title 'F1 Score Evolution' >> report.md
-          cml publish confusion_matrix.png --md --title 'Confusion Matrix' >> report.md
-
-          echo "" >> report.md
-          echo "---" >> report.md
-          echo "*Generated by CML on $(date)*" >> report.md
 
           # Publish the report
           cml comment create report.md
@@ -301,6 +366,11 @@ jobs:
           name: training-metrics
           path: |
             metrics.json
+            training_history.csv
+            confusion_matrix.png
+            loss_graph.png
+            accuracy_graph.png
+            f1_graph.png
             mlruns/
 
   # ===========================================================================
