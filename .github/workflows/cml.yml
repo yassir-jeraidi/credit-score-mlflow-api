@@ -104,6 +104,15 @@ jobs:
         env:
           PYTHONPATH: .
 
+      - name: Get actual sample count
+        id: actual_samples
+        run: |
+          ACTUAL=$(python -c "import pandas as pd; print(len(pd.read_csv('data/raw/credit_data.csv')))" 2>/dev/null || echo "unknown")
+          echo "count=$ACTUAL" >> $GITHUB_OUTPUT
+          echo "📊 Actual samples in data: $ACTUAL"
+        env:
+          PYTHONPATH: .
+
       - name: Run training verification
         id: train
         run: |
@@ -290,7 +299,7 @@ jobs:
       - name: Generate CML Report
         env:
           REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SAMPLES: ${{ steps.samples.outputs.n_samples }}
+          SAMPLES: ${{ steps.actual_samples.outputs.count }}
           BRANCH: ${{ github.head_ref || github.ref_name }}
           SHA: ${{ github.sha }}
         run: |
