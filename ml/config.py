@@ -1,5 +1,6 @@
 """ML Configuration for Credit Scoring Model."""
-from typing import List, Dict, Any
+
+from typing import Any, Dict, List
 
 # Feature configuration
 NUMERICAL_FEATURES: List[str] = [

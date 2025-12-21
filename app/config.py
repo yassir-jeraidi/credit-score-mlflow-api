@@ -3,12 +3,11 @@ Application Configuration using Pydantic Settings.
 
 Loads configuration from environment variables.
 """
-import os
-from typing import Optional
+
 from functools import lru_cache
 
-from pydantic_settings import BaseSettings
 from pydantic import Field
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):

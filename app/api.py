@@ -3,37 +3,36 @@ API Endpoints for Credit Scoring.
 
 Defines FastAPI routes for predictions, health checks, and model info.
 """
+
+import logging
 import time
 import uuid
-import logging
-from typing import List
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, HTTPException, status, Depends
-
-from app.schemas import (
-    CreditApplication,
-    PredictionResponse,
-    BatchPredictionRequest,
-    BatchPredictionResponse,
-    HealthResponse,
-    ReadinessResponse,
-    ModelInfoResponse,
-    ErrorResponse,
-    UserCreate,
-    UserResponse,
-    Token,
-)
-from app.config import get_settings, Settings
-from app.monitoring import record_prediction, record_batch_size
-from app.database import get_db
-from app import models, security
-from ml.predict import get_predictor, CreditScorePredictor, PredictionError, ModelLoadError
-from ml.config import ALL_FEATURES
-
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
+from sqlalchemy.orm import Session
+
+from app import models, security
+from app.config import get_settings
+from app.database import get_db
+from app.monitoring import record_batch_size, record_prediction
+from app.schemas import (
+    BatchPredictionRequest,
+    BatchPredictionResponse,
+    CreditApplication,
+    ErrorResponse,
+    HealthResponse,
+    ModelInfoResponse,
+    PredictionResponse,
+    ReadinessResponse,
+    Token,
+    UserCreate,
+    UserResponse,
+)
+from ml.config import ALL_FEATURES
+from ml.predict import CreditScorePredictor, PredictionError, get_predictor
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -43,6 +42,7 @@ router = APIRouter()
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
+
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -50,7 +50,9 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, get_settings().jwt_secret_key, algorithms=[get_settings().jwt_algorithm])
+        payload = jwt.decode(
+            token, get_settings().jwt_secret_key, algorithms=[get_settings().jwt_algorithm]
+        )
         email: str = payload.get("sub")
         if email is None:
             raise credentials_exception
@@ -60,6 +62,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     if user is None:
         raise credentials_exception
     return user
+
 
 @router.post("/auth/register", response_model=UserResponse, tags=["Authentication"])
 def register(user: UserCreate, db: Session = Depends(get_db)):
@@ -72,6 +75,7 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_user)
     return new_user
+
 
 @router.post("/auth/login", response_model=Token, tags=["Authentication"])
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
@@ -133,7 +137,7 @@ async def health_check() -> HealthResponse:
     description="Check if the API is ready to serve predictions",
 )
 async def readiness_check(
-    predictor: CreditScorePredictor = Depends(get_model_predictor)
+    predictor: CreditScorePredictor = Depends(get_model_predictor),
 ) -> ReadinessResponse:
     """
     Readiness check endpoint.
@@ -158,7 +162,7 @@ async def readiness_check(
     description="Get information about the currently loaded model",
 )
 async def get_model_info(
-    predictor: CreditScorePredictor = Depends(get_model_predictor)
+    predictor: CreditScorePredictor = Depends(get_model_predictor),
 ) -> ModelInfoResponse:
     """
     Get information about the loaded model.
@@ -191,7 +195,7 @@ async def get_model_info(
 async def predict(
     application: CreditApplication,
     predictor: CreditScorePredictor = Depends(get_model_predictor),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(get_current_user),
 ) -> PredictionResponse:
     """
     Make a credit prediction for a single application.
@@ -263,7 +267,7 @@ async def predict(
 async def predict_batch(
     request: BatchPredictionRequest,
     predictor: CreditScorePredictor = Depends(get_model_predictor),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(get_current_user),
 ) -> BatchPredictionResponse:
     """
     Make predictions for multiple applications.
@@ -306,16 +310,18 @@ async def predict_batch(
                 duration=duration / len(results),  # Average time per prediction
             )
 
-            predictions.append(PredictionResponse(
-                application_id=application_id,
-                prediction=result["prediction"],
-                confidence=result["confidence"],
-                risk_score=result["risk_score"],
-                approval_probability=result["approval_probability"],
-                rejection_probability=result["rejection_probability"],
-                model_version=result["model_version"],
-                timestamp=datetime.utcnow(),
-            ))
+            predictions.append(
+                PredictionResponse(
+                    application_id=application_id,
+                    prediction=result["prediction"],
+                    confidence=result["confidence"],
+                    risk_score=result["risk_score"],
+                    approval_probability=result["approval_probability"],
+                    rejection_probability=result["rejection_probability"],
+                    model_version=result["model_version"],
+                    timestamp=datetime.utcnow(),
+                )
+            )
 
         return BatchPredictionResponse(
             predictions=predictions,

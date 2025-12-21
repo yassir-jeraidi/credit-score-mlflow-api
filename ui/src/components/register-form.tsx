@@ -1,31 +1,31 @@
-'use client';
+"use client";
 
-import { useActionState } from 'react';
-import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
+import { useActionState } from "react";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { registerAction, type AuthState } from '@/app/actions/auth';
-import Link from 'next/link';
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { registerAction, type AuthState } from "@/app/actions/auth";
+import Link from "next/link";
 
 export function RegisterForm({
   className,
   ...props
-}: React.ComponentProps<'div'>) {
-  const [state, action, pending] = useActionState<AuthState | undefined, FormData>(
-    registerAction,
-    undefined
-  );
+}: React.ComponentProps<"div">) {
+  const [state, action, pending] = useActionState<
+    AuthState | undefined,
+    FormData
+  >(registerAction, undefined);
 
   return (
-    <div className={cn('flex flex-col gap-6', className)} {...props}>
+    <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card>
         <CardHeader>
           <CardTitle>Create an account</CardTitle>
@@ -77,11 +77,11 @@ export function RegisterForm({
                 />
               </div>
               <Button type="submit" className="w-full" disabled={pending}>
-                {pending ? 'Creating account...' : 'Create account'}
+                {pending ? "Creating account..." : "Create account"}
               </Button>
             </div>
             <div className="mt-4 text-center text-sm">
-              Already have an account?{' '}
+              Already have an account?{" "}
               <Link href="/login" className="underline underline-offset-4">
                 Sign in
               </Link>

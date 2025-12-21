@@ -3,24 +3,26 @@ ML Model Tests.
 
 Tests for data generation, model training, and prediction utilities.
 """
-import pytest
-import pandas as pd
-import numpy as np
-from unittest.mock import patch, MagicMock
 
-import sys
 import os
+import sys
+from unittest.mock import MagicMock, patch
+
+import numpy as np
+import pandas as pd
+import pytest
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ml.config import (
-    NUMERICAL_FEATURES,
-    CATEGORICAL_FEATURES,
     ALL_FEATURES,
-    LOAN_INTENT_CATEGORIES,
+    CATEGORICAL_FEATURES,
     HOME_OWNERSHIP_CATEGORIES,
+    LOAN_INTENT_CATEGORIES,
+    NUMERICAL_FEATURES,
 )
-from ml.data_generator import generate_credit_data, split_data, _generate_target
-from ml.train import create_preprocessing_pipeline, create_model_pipeline, evaluate_model
+from ml.data_generator import _generate_target, generate_credit_data, split_data
+from ml.train import create_model_pipeline, create_preprocessing_pipeline, evaluate_model
 
 
 class TestDataGenerator:
@@ -178,7 +180,7 @@ class TestPredictionUtilities:
         predictor = CreditScorePredictor(
             model_name="test-model",
             model_stage="Production",
-            mlflow_tracking_uri="http://localhost:5000"
+            mlflow_tracking_uri="http://localhost:5000",
         )
 
         assert predictor.model_name == "test-model"

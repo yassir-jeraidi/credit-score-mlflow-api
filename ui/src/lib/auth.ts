@@ -1,12 +1,12 @@
 /**
  * Authentication utilities for session management
  */
-import { SignJWT, jwtVerify } from 'jose';
-import { cookies } from 'next/headers';
+import { SignJWT, jwtVerify } from "jose";
+import { cookies } from "next/headers";
 
-const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:8000";
 const SESSION_SECRET = new TextEncoder().encode(
-  process.env.SESSION_SECRET || 'your-secret-key-min-32-characters-long!'
+  process.env.SESSION_SECRET || "your-secret-key-min-32-characters-long!",
 );
 
 export interface User {
@@ -32,14 +32,16 @@ export interface AuthResponse {
  */
 export async function register(email: string, password: string): Promise<User> {
   const response = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Registration failed' }));
-    throw new Error(error.detail || 'Registration failed');
+    const error = await response
+      .json()
+      .catch(() => ({ detail: "Registration failed" }));
+    throw new Error(error.detail || "Registration failed");
   }
 
   return response.json();
@@ -48,20 +50,25 @@ export async function register(email: string, password: string): Promise<User> {
 /**
  * Login user and get access token
  */
-export async function login(email: string, password: string): Promise<AuthResponse> {
+export async function login(
+  email: string,
+  password: string,
+): Promise<AuthResponse> {
   const formData = new URLSearchParams();
-  formData.append('username', email);
-  formData.append('password', password);
+  formData.append("username", email);
+  formData.append("password", password);
 
   const response = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: formData.toString(),
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Login failed' }));
-    throw new Error(error.detail || 'Invalid email or password');
+    const error = await response
+      .json()
+      .catch(() => ({ detail: "Login failed" }));
+    throw new Error(error.detail || "Invalid email or password");
   }
 
   return response.json();
@@ -70,22 +77,26 @@ export async function login(email: string, password: string): Promise<AuthRespon
 /**
  * Create encrypted session cookie
  */
-export async function createSession(userId: number, email: string, accessToken: string) {
+export async function createSession(
+  userId: number,
+  email: string,
+  accessToken: string,
+) {
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
   const session = await new SignJWT({ userId, email, accessToken })
-    .setProtectedHeader({ alg: 'HS256' })
+    .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(expiresAt)
     .sign(SESSION_SECRET);
 
   const cookieStore = await cookies();
-  cookieStore.set('session', session, {
+  cookieStore.set("session", session, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.NODE_ENV === "production",
     expires: expiresAt,
-    sameSite: 'lax',
-    path: '/',
+    sameSite: "lax",
+    path: "/",
   });
 }
 
@@ -94,7 +105,7 @@ export async function createSession(userId: number, email: string, accessToken: 
  */
 export async function getSession(): Promise<Session | null> {
   const cookieStore = await cookies();
-  const sessionCookie = cookieStore.get('session')?.value;
+  const sessionCookie = cookieStore.get("session")?.value;
 
   if (!sessionCookie) return null;
 
@@ -114,7 +125,9 @@ export async function getSession(): Promise<Session | null> {
 /**
  * Decrypt session (for proxy use)
  */
-export async function decrypt(cookie: string | undefined): Promise<Session | null> {
+export async function decrypt(
+  cookie: string | undefined,
+): Promise<Session | null> {
   if (!cookie) return null;
 
   try {
@@ -135,13 +148,16 @@ export async function decrypt(cookie: string | undefined): Promise<Session | nul
  */
 export async function deleteSession() {
   const cookieStore = await cookies();
-  cookieStore.delete('session');
+  cookieStore.delete("session");
 }
 
 /**
  * Get current user from session
  */
-export async function getCurrentUser(): Promise<{ userId: number; email: string } | null> {
+export async function getCurrentUser(): Promise<{
+  userId: number;
+  email: string;
+} | null> {
   const session = await getSession();
   if (!session) return null;
   return { userId: session.userId, email: session.email };

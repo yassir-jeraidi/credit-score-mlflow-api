@@ -1,43 +1,45 @@
 import {
   streamText,
-  UIMessage,
+  type UIMessage,
   convertToModelMessages,
   stepCountIs,
-} from 'ai';
-import { google } from '@ai-sdk/google';
-import { z } from 'zod';
-import { cookies } from 'next/headers';
-import { decrypt } from '@/lib/auth';
-import type { CreditApplication, PredictionResponse } from '@/lib/types';
+} from "ai";
+import { google } from "@ai-sdk/google";
+import { z } from "zod";
+import { cookies } from "next/headers";
+import { decrypt } from "@/lib/auth";
+import type { CreditApplication, PredictionResponse } from "@/lib/types";
 
 // Allow streaming responses up to 60 seconds
 export const maxDuration = 60;
 
-const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:8000";
 
 /**
  * Make a prediction call to the FastAPI backend with authentication
  */
 async function makeCreditPrediction(
   application: CreditApplication,
-  accessToken: string
+  accessToken: string,
 ): Promise<PredictionResponse> {
   if (!accessToken) {
-    throw new Error('Authentication required. Please log in.');
+    throw new Error("Authentication required. Please log in.");
   }
 
   const response = await fetch(`${API_BASE_URL}/api/v1/predict`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify(application),
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: response.statusText }));
-    throw new Error(error.detail || 'Prediction failed');
+    const error = await response
+      .json()
+      .catch(() => ({ detail: response.statusText }));
+    throw new Error(error.detail || "Prediction failed");
   }
 
   return response.json();
@@ -47,23 +49,43 @@ async function makeCreditPrediction(
  * Credit application schema for validation
  */
 const creditApplicationSchema = z.object({
-  age: z.number().min(18).max(100).describe('Age of the applicant (18-100 years)'),
-  income: z.number().positive().describe('Annual income in currency units'),
-  employment_length: z.number().min(0).max(50).describe('Years of employment'),
-  loan_amount: z.number().positive().describe('Requested loan amount'),
-  loan_intent: z.enum([
-    'PERSONAL',
-    'EDUCATION',
-    'MEDICAL',
-    'VENTURE',
-    'HOMEIMPROVEMENT',
-    'DEBTCONSOLIDATION',
-  ]).describe('Purpose of the loan'),
-  home_ownership: z.enum(['RENT', 'OWN', 'MORTGAGE', 'OTHER']).describe('Home ownership status'),
-  credit_history_length: z.number().min(0).max(50).describe('Years of credit history'),
-  num_credit_lines: z.number().min(0).max(50).describe('Number of credit lines/accounts'),
-  derogatory_marks: z.number().min(0).max(20).describe('Number of derogatory marks on credit report'),
-  total_debt: z.number().min(0).describe('Total existing debt'),
+  age: z
+    .number()
+    .min(18)
+    .max(100)
+    .describe("Age of the applicant (18-100 years)"),
+  income: z.number().positive().describe("Annual income in currency units"),
+  employment_length: z.number().min(0).max(50).describe("Years of employment"),
+  loan_amount: z.number().positive().describe("Requested loan amount"),
+  loan_intent: z
+    .enum([
+      "PERSONAL",
+      "EDUCATION",
+      "MEDICAL",
+      "VENTURE",
+      "HOMEIMPROVEMENT",
+      "DEBTCONSOLIDATION",
+    ])
+    .describe("Purpose of the loan"),
+  home_ownership: z
+    .enum(["RENT", "OWN", "MORTGAGE", "OTHER"])
+    .describe("Home ownership status"),
+  credit_history_length: z
+    .number()
+    .min(0)
+    .max(50)
+    .describe("Years of credit history"),
+  num_credit_lines: z
+    .number()
+    .min(0)
+    .max(50)
+    .describe("Number of credit lines/accounts"),
+  derogatory_marks: z
+    .number()
+    .min(0)
+    .max(20)
+    .describe("Number of derogatory marks on credit report"),
+  total_debt: z.number().min(0).describe("Total existing debt"),
 });
 
 export async function POST(req: Request) {
@@ -77,12 +99,12 @@ export async function POST(req: Request) {
 
   // Get access token from session cookie
   const cookieStore = await cookies();
-  const sessionCookie = cookieStore.get('session')?.value;
+  const sessionCookie = cookieStore.get("session")?.value;
   const session = await decrypt(sessionCookie);
   const accessToken = session?.accessToken;
 
   const result = streamText({
-    model: google('gemini-2.5-flash'),
+    model: google("gemini-2.5-flash"),
     messages: convertToModelMessages(messages),
     system: `You are a helpful credit scoring assistant for a financial services application. 
 Your role is to:
@@ -112,31 +134,45 @@ After receiving a prediction, explain the results clearly to the user, including
 Be professional, helpful, and provide financial guidance while being clear that this is a demonstration system.`,
     tools: {
       analyze_credit_application: {
-        description: 'Analyze a credit application and get a prediction from the ML model',
+        description:
+          "Analyze a credit application and get a prediction from the ML model",
         inputSchema: creditApplicationSchema,
-        execute: async (application: z.infer<typeof creditApplicationSchema>) => {
+        execute: async (
+          application: z.infer<typeof creditApplicationSchema>,
+        ) => {
           if (!accessToken) {
             return {
               success: false,
-              error: 'Authentication required. Please log in to analyze credit applications.',
+              error:
+                "Authentication required. Please log in to analyze credit applications.",
             };
           }
           try {
-            const prediction = await makeCreditPrediction(application as CreditApplication, accessToken);
+            const prediction = await makeCreditPrediction(
+              application as CreditApplication,
+              accessToken,
+            );
             return {
               success: true,
               prediction: prediction.prediction,
               confidence: Math.round(prediction.confidence * 100),
               risk_score: Math.round(prediction.risk_score * 100),
-              approval_probability: Math.round(prediction.approval_probability * 100),
-              rejection_probability: Math.round(prediction.rejection_probability * 100),
+              approval_probability: Math.round(
+                prediction.approval_probability * 100,
+              ),
+              rejection_probability: Math.round(
+                prediction.rejection_probability * 100,
+              ),
               model_version: prediction.model_version,
               application_id: prediction.application_id,
             };
           } catch (error) {
             return {
               success: false,
-              error: error instanceof Error ? error.message : 'Failed to analyze application',
+              error:
+                error instanceof Error
+                  ? error.message
+                  : "Failed to analyze application",
             };
           }
         },

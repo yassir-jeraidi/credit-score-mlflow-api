@@ -3,15 +3,16 @@ Main Application Entry Point.
 
 FastAPI application with middleware, startup events, and routing.
 """
+
 import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import get_settings
 from app.api import router
-from app.database import engine, Base
+from app.config import get_settings
+from app.database import Base, engine
 from app.monitoring import (
     PrometheusMiddleware,
     metrics_endpoint,
@@ -19,7 +20,7 @@ from app.monitoring import (
     set_model_info,
     set_model_loaded,
 )
-from ml.predict import get_predictor, ModelLoadError
+from ml.predict import ModelLoadError, get_predictor
 
 # Configure logging
 logging.basicConfig(

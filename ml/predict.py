@@ -3,22 +3,16 @@ Prediction Utilities for Credit Scoring Model.
 
 Handles model loading from MLflow and prediction logic.
 """
-import os
+
 import logging
-from typing import Dict, Any, Optional, List, Union
-from functools import lru_cache
+import os
+from typing import Any, Dict, List, Optional
 
 import mlflow
 import mlflow.sklearn
 import pandas as pd
-import numpy as np
 
-from ml.config import (
-    MODEL_NAME,
-    NUMERICAL_FEATURES,
-    CATEGORICAL_FEATURES,
-    ALL_FEATURES,
-)
+from ml.config import ALL_FEATURES, MODEL_NAME
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -27,11 +21,13 @@ logger = logging.getLogger(__name__)
 
 class ModelLoadError(Exception):
     """Exception raised when model loading fails."""
+
     pass
 
 
 class PredictionError(Exception):
     """Exception raised when prediction fails."""
+
     pass
 
 
@@ -74,10 +70,7 @@ class CreditScorePredictor:
 
             # Get model version
             client = mlflow.MlflowClient()
-            versions = client.get_latest_versions(
-                self.model_name,
-                stages=[self.model_stage]
-            )
+            versions = client.get_latest_versions(self.model_name, stages=[self.model_stage])
             if versions:
                 self.model_version = versions[0].version
 
@@ -108,10 +101,7 @@ class CreditScorePredictor:
             "is_loaded": self.is_loaded(),
         }
 
-    def predict(
-        self,
-        features: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def predict(self, features: Dict[str, Any]) -> Dict[str, Any]:
         """
         Make a single prediction.
 
@@ -155,10 +145,7 @@ class CreditScorePredictor:
             logger.error(f"Prediction failed: {e}")
             raise PredictionError(f"Prediction failed: {e}")
 
-    def predict_batch(
-        self,
-        features_list: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    def predict_batch(self, features_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Make batch predictions.
 
@@ -266,7 +253,7 @@ if __name__ == "__main__":
         }
 
         result = predictor.predict(test_features)
-        print(f"\nPrediction Result:")
+        print("\nPrediction Result:")
         for key, value in result.items():
             print(f"  {key}: {value}")
 

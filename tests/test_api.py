@@ -3,8 +3,10 @@ API Integration Tests.
 
 Tests for the Credit Score API endpoints.
 """
+
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 
 
@@ -71,11 +73,7 @@ class TestPredictionEndpoints:
     """Tests for prediction endpoints."""
 
     def test_predict_success(
-        self,
-        client: TestClient,
-        mock_predictor,
-        sample_application,
-        auth_headers
+        self, client: TestClient, mock_predictor, sample_application, auth_headers
     ):
         """Test successful prediction."""
         with patch("app.api.get_predictor", return_value=mock_predictor):
@@ -89,32 +87,28 @@ class TestPredictionEndpoints:
             assert 0 <= data["risk_score"] <= 1
             assert "model_version" in data
 
-    def test_predict_unauthorized(
-        self,
-        client: TestClient,
-        sample_application
-    ):
+    def test_predict_unauthorized(self, client: TestClient, sample_application):
         """Test prediction without authentication."""
         response = client.post("/api/v1/predict", json=sample_application)
         assert response.status_code == 401
 
     def test_predict_high_risk(
-        self,
-        client: TestClient,
-        mock_predictor,
-        high_risk_application,
-        auth_headers
+        self, client: TestClient, mock_predictor, high_risk_application, auth_headers
     ):
         """Test prediction for high-risk application."""
         with patch("app.api.get_predictor", return_value=mock_predictor):
-            response = client.post("/api/v1/predict", json=high_risk_application, headers=auth_headers)
+            response = client.post(
+                "/api/v1/predict", json=high_risk_application, headers=auth_headers
+            )
 
             assert response.status_code == 200
             data = response.json()
             assert data["prediction"] == "REJECTED"
             assert data["risk_score"] > 0.5
 
-    def test_predict_validation_error_age(self, client: TestClient, sample_application, auth_headers):
+    def test_predict_validation_error_age(
+        self, client: TestClient, sample_application, auth_headers
+    ):
         """Test prediction with invalid age."""
         sample_application["age"] = 15  # Too young
 
@@ -124,7 +118,9 @@ class TestPredictionEndpoints:
         data = response.json()
         assert "detail" in data
 
-    def test_predict_validation_error_income(self, client: TestClient, sample_application, auth_headers):
+    def test_predict_validation_error_income(
+        self, client: TestClient, sample_application, auth_headers
+    ):
         """Test prediction with invalid income."""
         sample_application["income"] = -1000  # Negative
 
@@ -133,10 +129,7 @@ class TestPredictionEndpoints:
         assert response.status_code == 422
 
     def test_predict_validation_error_loan_intent(
-        self,
-        client: TestClient,
-        sample_application,
-        auth_headers
+        self, client: TestClient, sample_application, auth_headers
     ):
         """Test prediction with invalid loan intent."""
         sample_application["loan_intent"] = "INVALID"
@@ -146,11 +139,7 @@ class TestPredictionEndpoints:
         assert response.status_code == 422
 
     def test_predict_model_not_loaded(
-        self,
-        client: TestClient,
-        mock_predictor,
-        sample_application,
-        auth_headers
+        self, client: TestClient, mock_predictor, sample_application, auth_headers
     ):
         """Test prediction when model is not loaded."""
         mock_predictor.is_loaded.return_value = False
@@ -161,18 +150,14 @@ class TestPredictionEndpoints:
             assert response.status_code == 503
 
     def test_batch_predict_success(
-        self,
-        client: TestClient,
-        mock_predictor,
-        batch_applications,
-        auth_headers
+        self, client: TestClient, mock_predictor, batch_applications, auth_headers
     ):
         """Test batch prediction."""
         with patch("app.api.get_predictor", return_value=mock_predictor):
             response = client.post(
                 "/api/v1/predict/batch",
                 json={"applications": batch_applications},
-                headers=auth_headers
+                headers=auth_headers,
             )
 
             assert response.status_code == 200
@@ -184,27 +169,18 @@ class TestPredictionEndpoints:
     def test_batch_predict_empty_list(self, client: TestClient, auth_headers):
         """Test batch prediction with empty list."""
         response = client.post(
-            "/api/v1/predict/batch",
-            json={"applications": []},
-            headers=auth_headers
+            "/api/v1/predict/batch", json={"applications": []}, headers=auth_headers
         )
 
         assert response.status_code == 422
 
-    def test_batch_predict_too_many(
-        self,
-        client: TestClient,
-        sample_application,
-        auth_headers
-    ):
+    def test_batch_predict_too_many(self, client: TestClient, sample_application, auth_headers):
         """Test batch prediction with too many applications."""
         # Create 101 applications (over limit)
         applications = [sample_application.copy() for _ in range(101)]
 
         response = client.post(
-            "/api/v1/predict/batch",
-            json={"applications": applications},
-            headers=auth_headers
+            "/api/v1/predict/batch", json={"applications": applications}, headers=auth_headers
         )
 
         assert response.status_code == 422
@@ -232,5 +208,6 @@ class TestMetricsEndpoint:
         response = client.get("/metrics")
 
         assert response.status_code == 200
-        assert "text/plain" in response.headers["content-type"] or \
-               "text/plain" in response.headers.get("content-type", "")
+        assert "text/plain" in response.headers[
+            "content-type"
+        ] or "text/plain" in response.headers.get("content-type", "")

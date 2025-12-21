@@ -49,7 +49,7 @@ import { logoutAction, getSessionAction } from "@/app/actions/auth";
 const CreditScoringChat = () => {
   const [input, setInput] = useState("");
   const [apiStatus, setApiStatus] = useState<"checking" | "online" | "offline">(
-    "checking"
+    "checking",
   );
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
@@ -174,16 +174,16 @@ const CreditScoringChat = () => {
                 apiStatus === "online"
                   ? "text-green-500"
                   : apiStatus === "offline"
-                  ? "text-red-500"
-                  : "text-yellow-500"
+                    ? "text-red-500"
+                    : "text-yellow-500"
               }`}
             />
             <span className="text-sm text-gray-500">
               {apiStatus === "checking"
                 ? "Checking API..."
                 : apiStatus === "online"
-                ? "API Online"
-                : "API Offline"}
+                  ? "API Online"
+                  : "API Offline"}
             </span>
           </div>
 
