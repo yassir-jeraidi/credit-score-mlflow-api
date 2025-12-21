@@ -1,0 +1,67 @@
+\chapter{Tools \& Environments}
+
+This project relies on a state-of-the-art technological stack, meticulously chosen to
+ensure robustness, scalability, and developer productivity using the Best MLOps practices.
+
+\section{Machine Learning \& Operations (MLOps)}
+
+\subsection{DVC (Data Version Control)}
+In any ML project, data is as critical as code. We use \textbf{DVC} to version control our datasets.
+Unlike Git, which struggles with large binary files, DVC stores pointers to the actual data locations.
+\begin{itemize}
+    \item \textbf{Role:} Versioning the CSV datasets and tracking changes in the data pipeline.
+    \item \textbf{Storage:} We configured an AWS S3 bucket as the remote storage backend,
+    allowing the team to pull specific data versions (`dvc pull`) seamlessly.
+\end{itemize}
+
+\subsection{MLflow}
+\textbf{MLflow} is the backbone of our experiment tracking and model lifecycle management.
+\begin{itemize}
+    \item \textbf{Tracking:} Every model training run logs parameters (hyperparameters),
+    metrics (Recall, AUC), and artifacts (serialized model files, confusion matrices) to the MLflow Tracking Server.
+    \item \textbf{Model Registry:} A centralized repository where models are staged, versioned,
+    and promoted to "Production". This decouples the training process from the consumption API.
+\end{itemize}
+
+\subsection{CML (Continuous Machine Learning)}
+To bring DevOps practices to Data Science, we utilize \textbf{CML}. CML enables us to generate
+visual reports (e.g., confusion matrices, precision-recall curves) directly inside GitHub Pull Requests.
+This ensures that no model regression is merged into the main branch.
+
+\section{Local \& Cloud Infrastructure}
+
+\subsection{Docker \& Docker Compose}
+Containerization is key to reproducibility. We use \textbf{Docker} to package every service:
+\begin{itemize}
+    \item \textbf{API Container:} Runs the FastAPI backend.
+    \item \textbf{UI Container:} Runs the Next.js frontend.
+    \item \textbf{MLflow Container:} Runs the tracking server.
+\end{itemize}
+\textbf{Docker Compose} orchestrates these multi-container applications, defining networking, volumes, and environment variables in a single `docker-compose.yml` file.
+
+\subsection{AWS (Amazon Web Services)}
+The platform is deployed on the cloud for global accessibility.
+\begin{itemize}
+    \item \textbf{EC2 (Elastic Compute Cloud):} We utilize EC2 instances to host our Dockerized application.
+    \item \textbf{S3 (Simple Storage Service):} Acts as the remote storage for DVC and MLflow artifacts.
+\end{itemize}
+
+\section{Backend \& Security}
+
+\subsection{FastAPI}
+Chosen for its high performance (based on Starlette and Pydantic) and automatic documentation features. FastAPI allows us to build asynchronous API endpoints that can handle concurrent requests efficiently, which is crucial for real-time inference.
+
+\subsection{JWT (JSON Web Tokens)}
+Security is paramount in financial applications. We implement stateless authentication using \textbf{JWT}. When a user logs in, they receive a signed token. This token must accompany every subsequent request to protected endpoints, ensuring that the API is secure against unauthorized access.
+
+\section{Frontend \& AI Integration}
+
+\subsection{Next.js}
+The frontend is built with \textbf{Next.js}, a React framework that offers Server-Side Rendering (SSR) and static generation. This ensures fast load times and SEO optimization.
+
+\subsection{Vercel AI SDK \& Google Gemini}
+To go beyond simple scoring, we integrated a Conversational AI agent.
+\begin{itemize}
+    \item \textbf{Vercel AI SDK:} Provides the hooks (`useChat`) to manage chat state and streaming responses.
+    \item \textbf{Google Gemini:} A powerful Large Language Model (LLM) that powers the advisory chatbot. It analyzes the user's risk profile and offers personalized financial advice in natural language.
+\end{itemize}

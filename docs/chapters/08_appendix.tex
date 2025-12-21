@@ -1,0 +1,80 @@
+\chapter{Appendix}
+
+\section{Project Directory Structure}
+\begin{lstlisting}
+credit-score-mlflow-api/
+├── .github/workflows/      # CI/CD Pipelines
+│   ├── ci.yml             # Continuous Integration
+│   ├── cml.yml            # Report Generation
+│   └── deploy.yml         # Deployment to AWS
+├── app/                    # FastAPI Backend
+│   ├── api.py             # Endpoints
+│   ├── main.py            # Entry point
+│   ├── schemas.py         # Pydantic models
+│   └── security.py        # JWT Logic
+├── ml/                     # Machine Learning Engine
+│   ├── train.py           # Training Pipeline
+│   └── data_generator.py  # Synthetic Data
+├── ui/                     # Next.js Frontend
+│   ├── src/app/           # App Router
+│   └── src/components/    # React Components
+├── docker/                 # Containerization
+│   ├── api.Dockerfile
+│   ├── ui.Dockerfile
+│   └── mlflow.Dockerfile
+├── docker-compose.yml      # Orchestration
+└── dvc.yaml               # Data Pipeline
+\end{lstlisting}
+
+\section{Technology Stack Summary}
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Category} & \textbf{Technology} & \textbf{Purpose} \\ \hline
+\textbf{Language} & Python 3.9+ & Backend / ML \\ \hline
+\textbf{Frontend} & Next.js / React & User Interface \\ \hline
+\textbf{Backend} & FastAPI & API / Controller \\ \hline
+\textbf{ML Library} & Scikit-learn / XGBoost & Modeling \\ \hline
+\textbf{Tracking} & MLflow & Experiment Tracking \\ \hline
+\textbf{Versioning} & DVC & Data Version Control \\ \hline
+\textbf{Container} & Docker & Isolation \\ \hline
+\textbf{Cloud} & AWS (EC2, S3) & Hosting / Storage \\ \hline
+\textbf{CI/CD} & GitHub Actions & Automation \\ \hline
+\textbf{GenAI} & Google Gemini & Advisory Chatbot \\ \hline
+\end{tabular}
+\caption{Full Technology Stack}
+\end{table}
+
+\section{Deployment Verification Logs}
+This section contains additional evidence of the system's robustness.
+
+\subsection{CML Integration in Pull Requests}
+Figure \ref{fig:cml} demonstrates how Continuous Machine Learning (CML) automatically posts a model performance report to the GitHub Pull Request discussion. This serves as a gatekeeper for model quality.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{github-actions-success-cml.png}
+    \caption{CML Report in GitHub PR}
+    \label{fig:cml}
+\end{figure}
+
+\subsection{Data Versioning on Cloud (AWS S3)}
+The successful push of data artifacts to the configured AWS S3 bucket is verified below. This ensures data persistence and sharing across the team.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{dvc-s3-aws-files.png}
+    \caption{DVC Artifacts stored in AWS S3}
+    \label{fig:dvc_s3}
+\end{figure}
+
+\subsection{API Health Check}
+The \texttt{/health} endpoint provides a quick diagnostic of the system status, including database connectivity and model loading status.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{api-health.png}
+    \caption{API Health Endpoint Response}
+    \label{fig:health}
+\end{figure}

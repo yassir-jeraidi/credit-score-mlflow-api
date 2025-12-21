@@ -1,0 +1,48 @@
+\chapter{Results \& Discussion}
+
+\section{Model Performance Analysis}
+The primary goal of the ML model was to maximize Recall for the "Default" class (Risk=1).
+\begin{itemize}
+    \item \textbf{Recall:} Our XGBoost model achieved a recall of 0.89. This means it successfully identifies 89\% of all actual defaulters.
+    \item \textbf{Precision:} The precision stands at 0.78. While lower than recall, this trade-off is acceptable in risk management where the cost of a False Negative (missing a defaulter) is much higher than a False Positive (checking a good payer).
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{mlflow-experiments-metrics.png}
+    \caption{Training Metrics: Recall vs Precision visualized in MLflow}
+    \label{fig:metrics_graph}
+\end{figure}
+
+\section{System Performance & Monitoring}
+Beyond appropriate model metrics, we monitor the operational health of the API using \textbf{Prometheus} and \textbf{Grafana}.
+Figure \ref{fig:grafana} shows the real-time dashboard tracking:
+\begin{itemize}
+    \item \textbf{Request Rate:} Number of predictions per second.
+    \item \textbf{Latency:} Time taken to serve a prediction (avg. < 100ms).
+    \item \textbf{Model Drift:} Statistical deviation in input data distributions.
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\textwidth]{gravana-dashboard.png}
+    \caption{Grafana Operational Dashboard}
+    \label{fig:grafana}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[b]{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{prometheus-predictions-total-graph.png}
+        \caption{Total Predictions Over Time}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{prometheus-predictions-total-total.png}
+        \caption{Cumulative Request Count}
+    \end{subfigure}
+    \caption{Prometheus Metrics Visualization}
+    \label{fig:prometheus}
+\end{figure}

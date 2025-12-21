@@ -1,0 +1,24 @@
+\chapter{Introduction}
+
+\section{Context}
+The financial services industry is undergoing a paradigm shift. With the advent of digital banking, the volume of loan applications has skyrocketed. Traditional methods of credit assessment, often relying on manual review by loan officers or static rule-based systems (scorecards), are proving inadequate. They are slow, inconsistent, and often fail to leverage the rich data available about applicants.
+
+Simultaneously, the regulatory landscape is tightening. Laws such as the GDPR in Europe mandate that automated decisions having legal effects on individuals—like credit denial—must be explainable. This creates a tension between the desire for high-accuracy Artificial Intelligence (AI) models and the legal necessity for transparency.
+
+\section{Problem Statement}
+Financial institutions face a "Black Box" dilemma:
+\begin{itemize}
+    \item \textbf{Performance vs. Transparency:} Advanced models like Neural Networks or Gradient Boosting Machines (GBM) offer superior predictive power compared to Logistic Regression. However, they are inherently opaque. A bank cannot simply tell a customer "The computer said no."
+    \item \textbf{Deployment Complexity:} Moving a model from a Jupyter Notebook to a production API that can handle concurrent requests is a complex engineering challenge, often referred to as the "Deployment Gap."
+    \item \textbf{Model Decay:} Unlike traditional software, ML models degrade over time as economic conditions change (Data Drift). A static model deployed once will essentially fail within months.
+\end{itemize}
+
+\section{Objectives}
+The primary objective of this project is to build an \textbf{Intelligent Credit Scoring API} that solves these challenges by bridging the gap between Data Science and Operations (MLOps).
+The specific goals are:
+\begin{enumerate}
+    \item \textbf{Develop a High-Recall Model:} Minimize financial risk by accurately identifying potential defaulters.
+    \item \textbf{Ensure Explainability (XAI):} Integrate layers of interpretability (SHAP) to provide textual reasons for every credit decision.
+    \item \textbf{Automate the Lifecycle:} Implement a full MLOps pipeline (CI/CD/CT) to ensure that the model can be retrained and redeployed automatically.
+    \item \textbf{Enhance User Experience:} leverage Generative AI (LLMs) to provide personalized financial advice based on the risk score, moving from a punitive "Rejection" to a constructive "Advisory" model.
+\end{enumerate}

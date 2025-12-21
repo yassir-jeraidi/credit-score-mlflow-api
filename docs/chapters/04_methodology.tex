@@ -1,0 +1,61 @@
+\chapter{Approach \& Methodology}
+
+This chapter details the rigorous data science methodology applied to build the credit scoring engine. We adhered to the CRISM-DM (Cross-Industry Standard Process for Data Mining) lifecycle, adapted for modern MLOps.
+
+\section{Data Acquisition \& Analysis}
+The dataset used simulates real-world credit data, containing a mix of demographic and financial features.
+
+\subsection{Feature Dictionary}
+The key features used for prediction include:
+\begin{itemize}
+    \item \textbf{person\_age}: Age of the applicant. Younger applicants often pose higher risk due to limited credit history.
+    \item \textbf{person\_income}: Annual income. The primary indicator of repayment capacity.
+    \item \textbf{person\_home\_ownership}: Categorical (RENT, OWN, MORTGAGE). Homeowners are statistically less likely to default.
+    \item \textbf{loan\_intent}: Purpose of the loan (EDUCATION, MEDICAL, VENTURE).
+    \item \textbf{loan\_grade}: External credit grade (A to G).
+    \item \textbf{loan\_amnt}: Requested loan amount.
+    \item \textbf{loan\_int\_rate}: Interest rate. Higher rates often correlate with higher risk profiles.
+    \item \textbf{loan\_status}: The target variable (0: Non-Default, 1: Default).
+    \item \textbf{cb\_person\_default\_on\_file}: Historical default record (Y/N).
+\end{itemize}
+
+\section{Preprocessing Pipeline}
+Raw data is rarely ready for ML algorithms. We implemented a robust preprocessing pipeline using \texttt{Scikit-Learn} pipelines.
+
+\subsection{Handling Imbalanced Data}
+As noted in the Context chapter, defaults are rare events (typically < 20\% of data). Training on this directly would lead to a biased model that predicts "No Default" for everyone to achieve high accuracy.
+To counter this, we applied \textbf{SMOTE (Synthetic Minority Over-sampling Technique)}. SMOTE generates synthetic examples in the feature space of the minority class, effectively balancing the training set distribution to 50/50.
+
+\subsection{Feature Engineering}
+\begin{itemize}
+    \item \textbf{One-Hot Encoding:} Applied to nominal variables like \texttt{loan\_intent} and \texttt{person\_home\_ownership}.
+    \item \textbf{Ordinal Encoding:} Applied to \texttt{loan\_grade} preserving the rank order (A > B > C).
+    \item \textbf{Scaling:} All numerical features were standardized using \texttt{StandardScaler} ($z = \frac{x - \mu}{\sigma}$) to prevent features with large magnitudes (like Income) from dominating the gradients.
+\end{itemize}
+
+\section{Model Selection Strategy}
+We evaluated several candidate families of algorithms.
+
+\subsection{Baseline: Logistic Regression}
+A simple linear model used to establish a performance baseline. It is highly interpretable but fails to capture non-linear relationships between income, age, and risk.
+
+\subsection{Candidate: Neural Networks (Deep Learning)}
+While powerful for unstructured data (images, text), Deep Learning often underperforms on tabular data compared to tree ensembles and requires significantly more data and tuning.
+
+\subsection{Selected: Gradient Boosting (XGBoost)}
+We selected \textbf{XGBoost} (Extreme Gradient Boosting) as our production model.
+\textbf{Justification:}
+\begin{enumerate}
+    \item \textbf{Performance:} consistently achieves state-of-the-art results on structured/tabular datasets.
+    \item \textbf{Handling Missing Data:} has built-in mechanisms to handle sparsity.
+    \item \textbf{Explainability:} compatible with TreeSHAP for exact Shapley value calculation.
+\end{enumerate}
+
+\section{Hyperparameter Tuning}
+We utilized \texttt{GridSearchCV} to optimize key parameters:
+\begin{itemize}
+    \item \texttt{n\_estimators}: Number of boosting rounds.
+    \item \texttt{max\_depth}: Maximum depth of a tree (control overfitting).
+    \item \texttt{learning\_rate}: Step size shrinkage to prevent overfitting.
+\end{itemize}
+All tuning experiments were tracked in MLflow to ensure the best configuration was selected for production.

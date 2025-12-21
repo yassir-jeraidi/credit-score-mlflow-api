@@ -1,0 +1,31 @@
+\chapter{Architecture \& Implementation}
+
+\section{Global Architecture}
+The system enables a seamless workflow from Data to Deployment. It consists of three main layers:
+\begin{enumerate}
+    \item \textbf{Data Layer:} Storage and versioning of datasets (managed via DVC).
+    \item \textbf{Model Layer:} ML training pipelines, experiment tracking (MLflow), and model serialization.
+    \item \textbf{Serving Layer:} An API exposing the model to the outside world.
+\end{enumerate}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{architecture.jpeg}
+    \caption{System Architecture Diagram}
+    \label{fig:architecture}
+\end{figure}
+
+\section{Backend \& API Controller}
+The backend is built using \textbf{FastAPI} (Python), chosen for its high performance and automatic documentation generation (Swagger UI). It acts as the controller, receiving client requests, validating data schemas using \textbf{Pydantic}, and delegating prediction tasks to the ML engine.
+While frameworks like Spring Boot are robust, Python's native support for our ML stack made a Python-based backend the logical choice for seamless integration.
+
+\section{ML Engine & Serialization}
+The trained model is serialized (pickled) and loaded into memory upon API startup. This ensures low-latency predictions. We use MLflow to manage the model registry, allowing us to stage and promote specific model versions (e.g., Staging $\rightarrow$ Production) without changing the application code.
+
+% Example of referencing other system diagrams if available
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{docker-containers.png}
+    \caption{Containerized Environment (Docker Services)}
+    \label{fig:docker}
+\end{figure}

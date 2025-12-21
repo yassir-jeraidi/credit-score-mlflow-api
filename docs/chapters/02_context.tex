@@ -1,0 +1,32 @@
+\chapter{Context \& State of the Art}
+
+\section{Credit Scoring Fundamentals}
+Credit scoring is a statistical analysis performed by lenders and financial institutions to access a person's creditworthiness. Lenders use credit scoring to decide on whether to extend or deny credit. Use of credit scoring allows for objective analysis of risk factors.
+Historically, this was done using the "5 Cs of Credit": Character, Capacity, Capital, Collateral, and Conditions. In the algorithmic era, these become features in a dataset.
+
+\section{The Imbalance Challenge}
+In credit risk modeling, the "Positive" class (Defaulters) is always the minority. A dataset might have 95\% good payers and 5\% defaulters. Use of standard accuracy metrics is dangerous here; a trivial model predicting "Good" for everyone would be 95\% accurate but 100\% useless.
+\textbf{Synthetic Minority Over-sampling Technique (SMOTE)} addresses this by creating synthetic line segments joining k-nearest neighbors of the minority class, effectively "hallucinating" new plausible defaulters to train the model more robustly.
+
+\section{Explainable AI (XAI)}
+\subsection{The "Right to Explanation"}
+Article 22 of the GDPR states that individuals have the right not to be subject to a decision based solely on automated processing. Valid explanations are required.
+
+\subsection{SHAP (SHapley Additive exPlanations)}
+We utilize SHAP values, a concept from Game Theory. It assigns each feature an importance value for a particular prediction.
+$$ \phi_i(f,x) = \sum_{z' \subseteq x'} \frac{|z'|! (M - |z'| - 1)!}{M!} [f_x(z') - f_x(z' \setminus i)] $$
+In simple terms, SHAP calculates the marginal contribution of a feature (e.g., "Income") to the final score, averaged over all possible combinations of other features. This provides a mathematically consistent explanation used in our API.
+
+\section{Generative AI in Fintech}
+The emergence of Large Language Models (LLMs) like GPT-4 and Gemini allows for a new layer of interaction. Instead of static dashboards, we can now offer "Conversational Banking."
+In this project, GenAI is not used for the risk score itself (due to hallucination risks) but for the \textbf{interpretation layer}—taking the hard data and SHAP values and crafting a human-readable, empathetic explanation for the user.
+
+\section{The Shift to MLOps}
+Google's paper "Hidden Technical Debt in Machine Learning Systems" highlighted that ML code is only a tiny fraction of a real-world system. Storage, ingestion, monitoring, and serving infrastructure make up the bulk.
+\textbf{MLOps (Machine Learning Operations)} is the discipline of applying DevOps principles to ML systems. It aims to unify ML system development (Dev) and ML system operation (Ops).
+Key components include:
+\begin{itemize}
+    \item \textbf{Data Versioning:} Treating data like code (DVC).
+    \item \textbf{Model Registry:} Formalizing model stages (MLflow).
+    \item \textbf{Continuous Training (CT):} Automatically retraining when data drifts.
+\end{itemize}

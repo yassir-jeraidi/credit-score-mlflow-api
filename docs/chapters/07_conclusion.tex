@@ -1,0 +1,21 @@
+\chapter{Conclusion}
+
+The \textbf{Intelligent Credit Scoring API} project serves as a definitive proof-of-concept for modern Financial AI systems. We successfully moved beyond the limitations of traditional, static scoring models by implementing a dynamic, self-learning pipeline.
+
+\section{Key Achievements}
+\begin{enumerate}
+    \item \textbf{End-to-End MLOps:} We successfully automated the entire lifecycle, from data ingestion (DVC) to model training (MLflow) and deployment (CD to AWS). This reduces the "Time-to-Market" for new model versions from months to minutes.
+    \item \textbf{Explainability First:} By integrating SHAP and LIME, we ensured that the "black box" nature of Ensemble methods does not hinder regulatory compliance. Every decision is transparent.
+    \item \textbf{GenAI Innovation:} The integration of Google Gemini transforms the application from a simple calculator into an intelligent advisor, significantly enhancing User Experience (UX).
+    \item \textbf{Robust Security:} The implementation of JWT and Docker containerization ensures that the system is secure and isolated.
+\end{enumerate}
+
+\section{Future Perspectives}
+While the current system is production-ready, several avenues for improvement exist:
+\begin{itemize}
+    \item \textbf{Infrastructure Scaling:} Moving from Docker Compose on a single EC2 instance to a Kubernetes (EKS) cluster for horizontal scaling.
+    \item \textbf{A/B Testing:} Implementing a Canary Deployment strategy to test new model versions on a subset of traffic before full rollout.
+    \item \textbf{Feature Store:} Introducing a Feature Store (like Feast) to manage features for both training and serving, ensuring consistency.
+\end{itemize}
+
+This project demonstrates that with the right MLOps culture and tooling, it is possible to build AI systems that are not only powerful but also reliable, explainable, and trustworthy.

@@ -1,0 +1,115 @@
+\chapter{Implementation \& Architecture}
+
+This chapter details the technical realization of the Credit Scoring platform. It serves as a mirror of the project's codebase, traversing from the high-level system design down to the specific implementations of the backend, frontend, and DevOps pipelines.
+
+\section{Global Architecture}
+The system architecture follows a microservices-oriented design, ensuring separation of concerns and independent scalability.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\textwidth]{architecture.jpeg}
+    \caption{Global High-Level System Architecture}
+    \label{fig:global_arch}
+\end{figure}
+
+As illustrated in Figure \ref{fig:global_arch}, the workflow is as follows:
+\begin{enumerate}
+    \item \textbf{User Interface (Client):} The user interacts with the Next.js web application.
+    \item \textbf{API Gateway (FastAPI):} Requests are routed to the Backend API. This layer handles Authentication (JWT) and Input Validation.
+    \item \textbf{ML Engine:} Validated data is passed to the ML Service, which loads the latest model from the MLflow Registry.
+    \item \textbf{Inference:} The model computes the default probability and SHAP values.
+    \item \textbf{Monitoring:} Metrics are scraped by Prometheus and visualized in Grafana.
+\end{enumerate}
+
+\section{Backend Implementation (FastAPI)}
+The backend is the orchestrator of the system. It exposes RESTful endpoints for prediction, authentication, and health checks.
+
+\subsection{API Documentation & Schemas}
+Thanks to FastAPI, we automatically generate interactive Swagger UI documentation. This allows developers to test endpoints directly.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{api-docs-swagger-1.png}
+    \caption{FastAPI Swagger Documentation - Auth & Health Endpoints}
+    \label{fig:swagger_auth}
+\end{figure}
+
+The \texttt{/predict} endpoint (Figure \ref{fig:swagger_predict}) accepts a structured JSON payload defined by Pydantic models. This ensures that data such as `person\_age` or `loan\_int\_rate` matches the expected types before reaching the model.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{api-test-predict-swagger.png}
+    \caption{Prediction Endpoint Testing with Input Payload}
+    \label{fig:swagger_predict}
+\end{figure}
+
+\subsection{Secure Authentication}
+We implemented a robust JWT-based authentication flow. Users must register and login to receive a `Check Token`. This token is stateless, meaning the server does not need to store session data, improving scalability.
+
+\section{Frontend \& GenAI Integration (Next.js)}
+The frontend is designed to be intuitive and responsive. It connects to the backend API to fetch credit scores and to the Google Gemini API for advisory services.
+
+\subsection{AI-Powered Chat Interface}
+Using the \textbf{Vercel AI SDK}, we built a streaming chat interface. The `useChat` hook manages the conversation state. When a user asks "Why was my loan rejected?", the system sends the user's profile and the model's SHAP output to Google Gemini. Gemini then generates a natural language explanation, acting as a virtual financial advisor.
+
+\section{MLOps Implementation}
+
+\subsection{Experiment Tracking with MLflow}
+Every training run is logged. Figure \ref{fig:mlflow_exp} shows the MLflow UI, where we can compare different runs based on their `run_id`.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{mlflow-experiments.png}
+    \caption{MLflow Experiments Dashboard}
+    \label{fig:mlflow_exp}
+\end{figure}
+
+Detailed metrics such as Confusion Matrices and ROC Curves are stored as artifacts (Figure \ref{fig:mlflow_artifacts}), allowing data scientists to diagnose model performance visually.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{mlflow-experiments-artifacts.png}
+    \caption{Logged Artifacts in MLflow}
+    \label{fig:mlflow_artifacts}
+\end{figure}
+
+\subsection{Cloud Infrastructure & Containerization}
+The entire application stack is containerized. Figure \ref{fig:docker_containers} displays the running containers: API, UI, MLflow, and Postgres.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{docker-containers.png}
+    \caption{Docker Containers Running in Production}
+    \label{fig:docker_containers}
+\end{figure}
+
+\section{Continuous Integration \& Deployment (CI/CD)}
+We utilize \textbf{GitHub Actions} to automate our software lifecycle.
+
+\subsection{CI Pipeline}
+Upon every Push or Pull Request, the CI pipeline runs:
+\begin{itemize}
+    \item \textbf{Linting:} Checking code quality.
+    \item \textbf{Testing:} Running `pytest`.
+    \item \textbf{CML Report:} Training a simplified model and commenting the results directly on the PR.
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{github-actions-ci-success.png}
+    \caption{Successful CI Pipeline Execution}
+    \label{fig:ci_success}
+\end{figure}
+
+\subsection{CD Pipeline}
+When code acts merged to the `main` branch, the CD pipeline triggers. It builds the Docker images, pushes them to the Container Registry (GHCR), and connects via SSH to the AWS EC2 instance to pull and restart the updated containers.
+
+\section{Database Design}
+We use PostgreSQL to persist user data and application state.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{postgres-db-tables.png}
+    \caption{PostgreSQL Database Schema}
+    \label{fig:db_schema}
+\end{figure}

@@ -1,0 +1,22 @@
+\chapter{Methodology}
+
+\section{Data Pipeline}
+The foundation of our Credit Scoring API is a robust data pipeline designed to handle tabular financial data. Unlike image datasets, our data consists of structured records including income, age, employment length, loan intent, and historical default status.
+
+\section{Preprocessing}
+Data quality is paramount. Our preprocessing steps include:
+\begin{enumerate}
+    \item \textbf{Handling Missing Values:} Imputation strategies were applied based on feature distribution (median for skewed numerical data, mode for categorical).
+    \item \textbf{Encoding:} Categorical variables (e.g., "Home Ownership", "Loan Intent") were encoded using One-Hot Encoding or Label Encoding as appropriate for the model architecture.
+    \item \textbf{Normalization:} Numerical features were scaled to ensure ensuring stability during training.
+    \item \textbf{Balancing:} As discussed, SMOTE was applied to the training set to synthesize minority class examples, preventing the model from ignoring defaulters.
+\end{enumerate}
+
+\section{Model Selection}
+For tabular data, deep learning models often struggle to outperform ensemble tree-based methods without extensive tuning and data volume. We evaluated several architectures:
+\begin{itemize}
+    \item \textbf{Logistic Regression:} A baseline simple interpretable model.
+    \item \textbf{Random Forest:} A bagging ensemble that reduces variance and overfitting.
+    \item \textbf{XGBoost / LightGBM:} Gradient boosting frameworks that typically achieve state-of-the-art performance on structured data.
+\end{itemize}
+We selected \textbf{XGBoost} as our primary engine due to its superior handling of missing values, regularization capabilities, and high execution speed. However, we maintain a "Hybrid" perspective, allowing for model swapping or ensembling if deep learning feature extractors become relevant in future iterations.
