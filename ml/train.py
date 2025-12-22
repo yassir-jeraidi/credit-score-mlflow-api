@@ -23,6 +23,7 @@ from sklearn.metrics import (
     recall_score,
     roc_auc_score,
 )
+from mlflow.models import infer_signature
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
