@@ -15,8 +15,7 @@ on:
 
 env:
   PYTHON_VERSION: "3.11"
-  #AWS_DEFAULT_REGION: eu-west-3
-  AWS_DEFAULT_REGION: us-east-2
+  AWS_DEFAULT_REGION: eu-west-3
 
 jobs:
   train-model:
@@ -70,8 +69,8 @@ jobs:
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
-          AWS_REGION: us-east-2
-          AWS_DEFAULT_REGION: us-east-2
+          AWS_REGION: eu-west-3
+          AWS_DEFAULT_REGION: eu-west-3
           PYTHONPATH: .
 
       - name: Setup CML
