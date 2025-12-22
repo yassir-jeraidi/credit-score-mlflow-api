@@ -61,17 +61,3 @@ logs/
 # Temp files
 *.tmp
 *.temp
-
-# DVC
-/models/
-/training_history.csv
-/confusion_matrix.png
-/metrics.json
-/evaluation_results.json
-/plots/
-
-# Keep DVC files
-!dvc.yaml
-!dvc.lock
-!params.yaml
-!.dvc/

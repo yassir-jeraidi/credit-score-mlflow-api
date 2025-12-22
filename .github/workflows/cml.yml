@@ -6,16 +6,12 @@ on:
     paths:
       - "ml/**"
       - "requirements.txt"
-      - "params.yaml"
-      - "dvc.yaml"
       - ".github/workflows/cml.yml"
   pull_request:
     branches: [main, dev]
     paths:
       - "ml/**"
       - "requirements.txt"
-      - "params.yaml"
-      - "dvc.yaml"
 
 env:
   PYTHON_VERSION: "3.11"
@@ -57,25 +53,80 @@ jobs:
 
       - name: Pull data from DVC
         id: dvc_pull
+        # FAIL if data cannot be pulled. Do not continue.
         run: dvc pull
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-      - name: Run DVC Pipeline
-        id: dvc_repro
-        run: dvc repro
+      - name: Train Model
+        id: train
+        # Logs to Databricks MLflow. Model registration is disabled by default
+        # due to IAM permission issues with Unity Catalog's S3 bucket.
+        # You can register the model manually from the Databricks UI.
+        # To enable registration, add --register flag (requires proper IAM setup).
+        run: |
+          python -m ml.cloud_train \
+            --mlflow-uri "${{ secrets.DATABRICKS_HOST }}"
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
           AWS_REGION: eu-west-3
           AWS_DEFAULT_REGION: eu-west-3
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           PYTHONPATH: .
 
       - name: Setup CML
         uses: iterative/setup-cml@v2
+
+      - name: Generate Training Plots
+        run: |
+          python - <<'PYCODE'
+          import pandas as pd
+          import matplotlib.pyplot as plt
+
+          try:
+              df = pd.read_csv("training_history.csv")
+              
+              # Plot Loss
+              plt.figure(figsize=(10, 6))
+              plt.plot(df['stage'], df['train_loss'], label='Train Loss')
+              plt.plot(df['stage'], df['test_loss'], label='Test Loss')
+              plt.title('Loss Evolution')
+              plt.xlabel('Stage')
+              plt.ylabel('Loss')
+              plt.legend()
+              plt.grid(True)
+              plt.savefig('loss_graph.png')
+              plt.close()
+              
+              # Plot Accuracy
+              plt.figure(figsize=(10, 6))
+              plt.plot(df['stage'], df['train_accuracy'], label='Train Acc')
+              plt.plot(df['stage'], df['test_accuracy'], label='Test Acc')
+              plt.title('Accuracy Evolution')
+              plt.xlabel('Stage')
+              plt.ylabel('Accuracy')
+              plt.legend()
+              plt.grid(True)
+              plt.savefig('accuracy_graph.png')
+              plt.close()
+              
+              # Plot F1
+              plt.figure(figsize=(10, 6))
+              plt.plot(df['stage'], df['train_f1'], label='Train F1')
+              plt.plot(df['stage'], df['test_f1'], label='Test F1')
+              plt.title('F1 Score Evolution')
+              plt.xlabel('Stage')
+              plt.ylabel('F1 Score')
+              plt.legend()
+              plt.grid(True)
+              plt.savefig('f1_graph.png')
+              plt.close()
+              
+              print("✅ Generated all training plots")
+          except Exception as e:
+              print(f"❌ Failed to generate plots: {e}")
+          PYCODE
 
       - name: Generate CML Report
         env:
@@ -83,65 +134,64 @@ jobs:
           BRANCH: ${{ github.head_ref || github.ref_name }}
           SHA: ${{ github.sha }}
         run: |
-          # Generate DVC metrics diff
-          echo "## 📊 ML Training Report" > report.md
-          echo "" >> report.md
-          echo "**Branch:** $BRANCH" >> report.md
-          echo "**Commit:** $SHA" >> report.md
-          echo "" >> report.md
-          
-          # Add metrics comparison
-          echo "### 📈 Model Performance" >> report.md
-          echo "" >> report.md
-          dvc metrics show --md >> report.md || echo "No metrics to display" >> report.md
-          echo "" >> report.md
-          
-          # Add metrics diff if on PR
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            echo "### 📊 Changes from main" >> report.md
-            echo "" >> report.md
-            dvc metrics diff main --md >> report.md || echo "No diff available" >> report.md
-            echo "" >> report.md
-          fi
-          
-          # Add plots
-          echo "### 📊 Visualizations" >> report.md
-          echo "" >> report.md
-          
-          # Publish plots using CML
-          if [ -f "training_history.csv" ]; then
-            echo "#### Training Metrics" >> report.md
-            dvc plots show training_history.csv -o plots/ || echo "Unable to generate plots" >> report.md
-            
-            # Find and embed generated plots
-            for plot in plots/*.png; do
-              if [ -f "$plot" ]; then
-                echo "![$plot]($plot)" >> report.md
-              fi
-            done
-          fi
-          
-          if [ -f "confusion_matrix.png" ]; then
-            echo "#### Confusion Matrix" >> report.md
-            cml publish confusion_matrix.png --md >> report.md
-            echo "" >> report.md
-          fi
-          
-          echo "---" >> report.md
-          echo "*Report generated automatically by CML + DVC*" >> report.md
+          python - <<'PYCODE'
+          import json
+          import os
+          from pathlib import Path
+
+          try:
+              metrics = json.loads(Path("metrics.json").read_text())
+          except FileNotFoundError:
+              metrics = {}
+
+          branch = os.environ.get("BRANCH", "n/a")
+          sha = os.environ.get("SHA", "n/a")
+
+          def fmt(name: str) -> str:
+              val = metrics.get(name)
+              return f"{val:.4f}" if isinstance(val, (int, float)) else "n/a"
+
+          lines = [
+              "## 📊 ML Training Report",
+              "",
+              f"**Branch:** {branch}",
+              f"**Commit:** {sha}",
+              "",
+              "### 📈 Model Performance",
+              "",
+              "| Metric | Value |",
+              "|:--- | ---:|",
+              f"| Accuracy | {fmt('accuracy')} |",
+              f"| Precision | {fmt('precision')} |",
+              f"| Recall | {fmt('recall')} |",
+              f"| F1-score | {fmt('f1_score')} |",
+              f"| ROC AUC | {fmt('roc_auc')} |",
+              "",
+              "### 📊 Visualizations",
+              "",
+              "#### Loss Evolution",
+              "![Loss](./loss_graph.png)",
+              "",
+              "#### Accuracy Evolution",
+              "![Accuracy](./accuracy_graph.png)",
+              "",
+              "#### F1 Score Evolution",
+              "![F1 Score](./f1_graph.png)",
+              "",
+              "#### Confusion Matrix",
+              "![Confusion Matrix](./confusion_matrix.png)",
+              "",
+              "---",
+              f"*Report generated automatically by CML*",
+          ]
+
+          Path("report.md").write_text("\n".join(lines))
+          PYCODE
 
           # Publish the report
           cml comment create report.md
 
-      - name: Push DVC outputs to remote
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          dvc push
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
-      - name: Upload artifacts
+      - name: Upload metrics artifact
         uses: actions/upload-artifact@v4
         with:
           name: training-metrics
@@ -149,4 +199,6 @@ jobs:
             metrics.json
             training_history.csv
             confusion_matrix.png
-            dvc.lock
+            loss_graph.png
+            accuracy_graph.png
+            f1_graph.png
