@@ -29,7 +29,6 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from ml.config import (
     CATEGORICAL_FEATURES,
     DEFAULT_MODEL_PARAMS,
-    MODEL_NAME,
     NUMERICAL_FEATURES,
     TEST_SIZE,
 )
@@ -42,6 +41,8 @@ from ml.data_generator import (
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+MODEL_NAME = "credit-score-catalog.credit-scoring.credit-score-model"
 
 
 def create_preprocessing_pipeline() -> ColumnTransformer:
