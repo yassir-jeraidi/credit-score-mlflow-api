@@ -162,6 +162,7 @@ def train_model(
     # Set MLflow tracking URI and Experiment
     # Ensure env vars DATABRICKS_HOST and DATABRICKS_TOKEN are set in CML
     mlflow.set_tracking_uri("databricks")
+    mlflow.set_registry_uri("databricks-uc")
     mlflow.set_experiment("/Users/mohamed.hakim.dev@gmail.com/credit-score")
 
     # Load Data - STRICTLY from DVC/Path
