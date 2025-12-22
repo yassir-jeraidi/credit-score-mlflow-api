@@ -1,76 +1,127 @@
 \chapter{Appendix}
 
 \section{Project Directory Structure}
+
+The following listing presents the organization of the project repository. Each directory serves a specific purpose in the overall architecture, from source code to infrastructure configuration.
+
 \begin{lstlisting}
 credit-score-mlflow-api/
-├── .github/workflows/      # CI/CD Pipelines
-│   ├── ci.yml             # Continuous Integration
-│   ├── cml.yml            # Report Generation
-│   └── deploy.yml         # Deployment to AWS
-├── app/                    # FastAPI Backend
-│   ├── api.py             # Endpoints
-│   ├── main.py            # Entry point
-│   ├── schemas.py         # Pydantic models
-│   └── security.py        # JWT Logic
-├── ml/                     # Machine Learning Engine
-│   ├── train.py           # Training Pipeline
-│   └── data_generator.py  # Synthetic Data
-├── ui/                     # Next.js Frontend
-│   ├── src/app/           # App Router
-│   └── src/components/    # React Components
-├── docker/                 # Containerization
-│   ├── api.Dockerfile
-│   ├── ui.Dockerfile
-│   └── mlflow.Dockerfile
-├── docker-compose.yml      # Orchestration
-└── dvc.yaml               # Data Pipeline
+|-- .dvc/                    # DVC Configuration
+|   `-- config               # S3 remote settings
+|-- .github/workflows/       # CI/CD Pipelines
+|   |-- ci.yml               # Continuous Integration
+|   |-- cml.yml              # ML Training Reports
+|   `-- deploy.yml           # Deployment to AWS
+|-- app/                     # FastAPI Backend
+|   |-- api.py               # REST Endpoints
+|   |-- config.py            # Pydantic Settings
+|   |-- database.py          # SQLAlchemy Connection
+|   |-- main.py              # Application Factory
+|   |-- models.py            # Database Models
+|   |-- monitoring.py        # Prometheus Metrics
+|   |-- schemas.py           # Request/Response Models
+|   `-- security.py          # JWT Authentication
+|-- data/                    # Data Directory
+|   `-- raw/                 # DVC-tracked CSV files
+|-- docker/                  # Containerization
+|   |-- api.Dockerfile       # Backend Image
+|   |-- mlflow.Dockerfile    # Tracking Server Image
+|   |-- ui.Dockerfile        # Frontend Image
+|   `-- docker-compose.yml   # Service Orchestration
+|-- grafana/provisioning/    # Dashboard Configuration
+|-- ml/                      # Machine Learning Engine
+|   |-- config.py            # Feature Definitions
+|   |-- data_generator.py    # Synthetic Data Creation
+|   |-- predict.py           # Inference Utilities
+|   `-- train.py             # Training Pipeline
+|-- tests/                   # Test Suite
+|   |-- conftest.py          # Pytest Fixtures
+|   |-- test_api.py          # API Tests
+|   `-- test_model.py        # ML Pipeline Tests
+|-- ui/                      # Next.js Frontend
+|   |-- src/app/             # App Router Pages
+|   |-- src/components/      # React Components
+|   `-- src/lib/             # Utility Functions
+|-- prometheus.yml           # Metrics Collection Config
+`-- requirements.txt         # Python Dependencies
 \end{lstlisting}
 
 \section{Technology Stack Summary}
-\begin{table}[h]
+
+The following table summarizes the core technologies employed in the project, organized by functional category.
+
+\begin{table}[H]
 \centering
 \begin{tabular}{|l|l|l|}
 \hline
 \textbf{Category} & \textbf{Technology} & \textbf{Purpose} \\ \hline
-\textbf{Language} & Python 3.9+ & Backend / ML \\ \hline
-\textbf{Frontend} & Next.js / React & User Interface \\ \hline
-\textbf{Backend} & FastAPI & API / Controller \\ \hline
-\textbf{ML Library} & Scikit-learn / XGBoost & Modeling \\ \hline
-\textbf{Tracking} & MLflow & Experiment Tracking \\ \hline
-\textbf{Versioning} & DVC & Data Version Control \\ \hline
-\textbf{Container} & Docker & Isolation \\ \hline
-\textbf{Cloud} & AWS (EC2, S3) & Hosting / Storage \\ \hline
-\textbf{CI/CD} & GitHub Actions & Automation \\ \hline
-\textbf{GenAI} & Google Gemini & Advisory Chatbot \\ \hline
+Language & Python 3.11 & Backend and ML \\ \hline
+Frontend & Next.js 16 / React 19 & User Interface \\ \hline
+Backend & FastAPI & REST API \\ \hline
+ML Library & scikit-learn & GradientBoostingClassifier \\ \hline
+Tracking & MLflow / Databricks & Experiment Tracking \\ \hline
+Data Versioning & DVC & Dataset Version Control \\ \hline
+Container & Docker & Isolation and Packaging \\ \hline
+Orchestration & Docker Compose & Multi-Container Management \\ \hline
+Cloud & AWS (EC2, S3) & Hosting and Storage \\ \hline
+CI/CD & GitHub Actions & Automation \\ \hline
+Monitoring & Prometheus / Grafana & Metrics and Dashboards \\ \hline
+Authentication & JWT (python-jose) & Stateless Security \\ \hline
+GenAI & Google Gemini & Advisory Chatbot \\ \hline
 \end{tabular}
-\caption{Full Technology Stack}
+\caption{Complete Technology Stack}
 \end{table}
 
-\section{Deployment Verification Logs}
-This section contains additional evidence of the system's robustness.
+\section{Environment Variables}
 
-\subsection{CML Integration in Pull Requests}
-Figure \ref{fig:cml} demonstrates how Continuous Machine Learning (CML) automatically posts a model performance report to the GitHub Pull Request discussion. This serves as a gatekeeper for model quality.
+The application configuration relies on environment variables, enabling deployment across different environments without code changes. The following table documents the key variables.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Variable} & \textbf{Purpose} \\ \hline
+MLFLOW\_TRACKING\_URI & MLflow server address \\ \hline
+MODEL\_NAME & Registered model name \\ \hline
+MODEL\_STAGE & Model lifecycle stage (Production) \\ \hline
+POSTGRES\_USER & Database username \\ \hline
+POSTGRES\_PASSWORD & Database password \\ \hline
+POSTGRES\_DB & Database name \\ \hline
+JWT\_SECRET & Token signing key \\ \hline
+GOOGLE\_GENERATIVE\_AI\_API\_KEY & Gemini API access \\ \hline
+\end{tabular}
+\caption{Key Environment Variables}
+\end{table}
+
+\section{Deployment Evidence}
+
+This section presents additional artifacts demonstrating successful deployment and operation of the platform.
+
+\subsection{Continuous Machine Learning Reports}
+
+The CML workflow automatically generates model performance reports on pull requests. This integration ensures that reviewers have visibility into the impact of code changes on model quality before merging.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.9\textwidth]{github-actions-success-cml.png}
-    \caption{CML Report in GitHub PR}
+    \caption{CML Report Posted to GitHub Pull Request}
     \label{fig:cml}
 \end{figure}
 
-\subsection{Data Versioning on Cloud (AWS S3)}
-The successful push of data artifacts to the configured AWS S3 bucket is verified below. This ensures data persistence and sharing across the team.
+\subsection{Data Versioning on AWS S3}
+
+The DVC remote storage configuration points to an AWS S3 bucket where dataset files are stored. The following figure shows the bucket contents after pushing training data.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.9\textwidth]{dvc-s3-aws-files.png}
-    \caption{DVC Artifacts stored in AWS S3}
+    \caption{DVC Artifacts Stored in AWS S3}
     \label{fig:dvc_s3}
 \end{figure}
 
-\subsection{API Health Check}
-The \texttt{/health} endpoint provides a quick diagnostic of the system status, including database connectivity and model loading status.
+\subsection{API Health Verification}
+
+The health endpoint provides a quick diagnostic confirming that the API is operational and reporting its current version.
 
 \begin{figure}[H]
     \centering

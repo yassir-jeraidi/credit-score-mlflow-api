@@ -1,12 +1,15 @@
 \begin{abstract}
 \textbf{English}
 
-In the era of digital banking, financial institutions face the critical challenge of assessing credit risk with both high accuracy and transparency. Traditional manual methods are slow and unscalable, while modern "black-box" machine learning algorithms often fail to meet regulatory requirements for explainability (GDPR).
+In the era of digital banking, financial institutions face the critical challenge of assessing credit risk with both accuracy and operational efficiency. Traditional manual methods are slow and unscalable, while deploying machine learning models in production environments presents significant engineering challenges often referred to as the ``deployment gap''.
+This project addresses these challenges by presenting a comprehensive, production-grade Credit Scoring MLOps Platform that demonstrates the complete lifecycle of a machine learning system.
 
-This project presents a comprehensive, production-grade \textbf{Credit Scoring MLOps Platform}. The system integrates advanced Machine Learning (XGBoost) for high-recall default prediction with Explainable AI (SHAP/LIME) to provide transparent decision justifications. We leverage a modern technology stack including \textbf{FastAPI} for the backend, \textbf{Next.js} for the frontend, and \textbf{Generative AI (Google Gemini)} for intelligent financial advisory. The entire lifecycle is managed via a robust MLOps pipeline using \textbf{MLflow}, \textbf{DVC}, \textbf{Docker}, and \textbf{GitHub Actions} for CI/CD, ensuring reproducibility, scalability, and continuous deployment.
+The system employs a Gradient Boosting Classifier for binary credit decision prediction, trained on synthetic data to ensure GDPR compliance. The machine learning pipeline is managed through MLflow, which provides experiment tracking, model versioning, and a centralized registry for promoting models through staging and production environments. Data versioning is handled through DVC with AWS S3 as the remote storage backend, ensuring reproducibility across the entire team.
+
+The platform features a FastAPI backend that exposes RESTful endpoints for authentication and real-time predictions, complete with JWT-based security and comprehensive input validation through Pydantic schemas. The frontend, built with Next.js and React, integrates Google Gemini as a Generative AI layer to provide users with intelligent financial advisory based on their credit assessment. The entire application stack is containerized using Docker with multi-stage builds and orchestrated through Docker Compose, while GitHub Actions automates the CI/CD pipeline for testing, building, and deploying to AWS EC2.
 
 \vspace{0.5cm}
-\noindent \textbf{Keywords:} Credit Scoring, MLOps, Explainable AI, Generative AI, FastAPI, Next.js, Docker, CI/CD, Financial Risk.
+\noindent \textbf{Keywords:} Credit Scoring, MLOps, Machine Learning, FastAPI, Next.js, Docker, CI/CD, MLflow, Generative AI.
 
 \vspace{1cm}
 \hrule
@@ -14,10 +17,12 @@ This project presents a comprehensive, production-grade \textbf{Credit Scoring M
 
 \textbf{Résumé (Français)}
 
-À l'ère de la banque numérique, les institutions financières sont confrontées au défi majeur d'évaluer le risque de crédit avec précision et transparence. Les méthodes manuelles traditionnelles sont lentes et peu évolutives, tandis que les algorithmes modernes d'apprentissage automatique, souvent qualifiés de "boîtes noires", peinent à satisfaire les exigences réglementaires d'explicabilité (RGPD).
+À l'ère de la banque numérique, les institutions financières sont confrontées au défi majeur d'évaluer le risque de crédit avec précision et efficacité opérationnelle. Les méthodes manuelles traditionnelles sont lentes et peu évolutives, tandis que le déploiement de modèles d'apprentissage automatique en production présente des défis d'ingénierie importants, souvent désignés sous le terme de ``fossé de déploiement''. Ce projet répond à ces défis en présentant une plateforme MLOps de Scoring de Crédit complète et prête pour la production, démontrant le cycle de vie complet d'un système d'apprentissage automatique.
 
-Ce projet présente une plateforme \textbf{MLOps de Scoring de Crédit} complète et prête pour la production. Le système intègre des techniques avancées d'apprentissage automatique (XGBoost) pour une prédiction à haut rappel des défauts de paiement, couplées à l'IA Explicable (SHAP/LIME) pour justifier chaque décision. Nous nous appuyons sur une pile technologique moderne comprenant \textbf{FastAPI} pour le backend, \textbf{Next.js} pour le frontend, et \textbf{l'IA Générative (Google Gemini)} pour le conseil financier intelligent. L'ensemble du cycle de vie est géré via un pipeline MLOps robuste utilisant \textbf{MLflow}, \textbf{DVC}, \textbf{Docker} et \textbf{GitHub Actions} pour l'intégration et le déploiement continus (CI/CD), garantissant reproductibilité, scalabilité et déploiement continu.
+Le système utilise un classificateur Gradient Boosting pour la prédiction binaire des décisions de crédit, entraîné sur des données synthétiques pour garantir la conformité au RGPD. Le pipeline d'apprentissage automatique est géré via MLflow, qui assure le suivi des expériences, le versionnement des modèles et un registre centralisé pour la promotion des modèles à travers les environnements de staging et de production. Le versionnement des données est géré par DVC avec AWS S3 comme stockage distant, garantissant la reproductibilité pour toute l'équipe.
+
+La plateforme comprend un backend FastAPI exposant des endpoints RESTful pour l'authentification et les prédictions en temps réel, avec une sécurité basée sur JWT et une validation complète des entrées via les schémas Pydantic. Le frontend, construit avec Next.js et React, intègre Google Gemini comme couche d'IA Générative pour fournir aux utilisateurs des conseils financiers intelligents basés sur leur évaluation de crédit. L'ensemble de la pile applicative est conteneurisée avec Docker utilisant des builds multi-étapes et orchestrée via Docker Compose, tandis que GitHub Actions automatise le pipeline CI/CD pour les tests, la construction et le déploiement sur AWS EC2.
 
 \vspace{0.5cm}
-\noindent \textbf{Mots-clés:} Scoring de Crédit, MLOps, IA Explicable, IA Générative, FastAPI, Next.js, Docker, CI/CD, Risque Financier.
+\noindent \textbf{Mots-clés:} Scoring de Crédit, MLOps, Apprentissage Automatique, FastAPI, Next.js, Docker, CI/CD, MLflow, IA Générative.
 \end{abstract}

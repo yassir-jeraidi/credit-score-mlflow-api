@@ -1,32 +1,31 @@
 \chapter{Context \& State of the Art}
 
 \section{Credit Scoring Fundamentals}
-Credit scoring is a statistical analysis performed by lenders and financial institutions to access a person's creditworthiness. Lenders use credit scoring to decide on whether to extend or deny credit. Use of credit scoring allows for objective analysis of risk factors.
-Historically, this was done using the "5 Cs of Credit": Character, Capacity, Capital, Collateral, and Conditions. In the algorithmic era, these become features in a dataset.
 
-\section{The Imbalance Challenge}
-In credit risk modeling, the "Positive" class (Defaulters) is always the minority. A dataset might have 95\% good payers and 5\% defaulters. Use of standard accuracy metrics is dangerous here; a trivial model predicting "Good" for everyone would be 95\% accurate but 100\% useless.
-\textbf{Synthetic Minority Over-sampling Technique (SMOTE)} addresses this by creating synthetic line segments joining k-nearest neighbors of the minority class, effectively "hallucinating" new plausible defaulters to train the model more robustly.
+Credit scoring represents one of the most consequential applications of statistical analysis in the financial industry. At its core, credit scoring is the process by which lenders and financial institutions evaluate the creditworthiness of potential borrowers. This evaluation determines whether to extend credit, what terms to offer, and what interest rates to charge. The objectivity provided by algorithmic approaches has largely replaced the subjective judgment that once characterized lending decisions.
 
-\section{Explainable AI (XAI)}
-\subsection{The "Right to Explanation"}
-Article 22 of the GDPR states that individuals have the right not to be subject to a decision based solely on automated processing. Valid explanations are required.
+Historically, credit assessment relied on what bankers called the ``Five Cs of Credit'': Character (the borrower's reputation and track record), Capacity (the ability to repay based on income), Capital (the borrower's existing assets), Collateral (assets pledged against the loan), and Conditions (the purpose of the loan and economic environment). In the algorithmic era, these conceptual categories translate into features in a dataset, numerical and categorical variables that a model can learn to associate with default risk.
 
-\subsection{SHAP (SHapley Additive exPlanations)}
-We utilize SHAP values, a concept from Game Theory. It assigns each feature an importance value for a particular prediction.
-$$ \phi_i(f,x) = \sum_{z' \subseteq x'} \frac{|z'|! (M - |z'| - 1)!}{M!} [f_x(z') - f_x(z' \setminus i)] $$
-In simple terms, SHAP calculates the marginal contribution of a feature (e.g., "Income") to the final score, averaged over all possible combinations of other features. This provides a mathematically consistent explanation used in our API.
+\section{The Class Imbalance Challenge}
 
-\section{Generative AI in Fintech}
-The emergence of Large Language Models (LLMs) like GPT-4 and Gemini allows for a new layer of interaction. Instead of static dashboards, we can now offer "Conversational Banking."
-In this project, GenAI is not used for the risk score itself (due to hallucination risks) but for the \textbf{interpretation layer}—taking the hard data and SHAP values and crafting a human-readable, empathetic explanation for the user.
+One of the fundamental challenges in credit risk modeling is the inherent imbalance between classes. In any representative portfolio, the majority of borrowers will repay their loans as agreed, while only a small fraction will default. A typical dataset might contain ninety-five percent good payers and only five percent defaulters. This imbalance creates a subtle but serious problem for machine learning algorithms.
 
-\section{The Shift to MLOps}
-Google's paper "Hidden Technical Debt in Machine Learning Systems" highlighted that ML code is only a tiny fraction of a real-world system. Storage, ingestion, monitoring, and serving infrastructure make up the bulk.
-\textbf{MLOps (Machine Learning Operations)} is the discipline of applying DevOps principles to ML systems. It aims to unify ML system development (Dev) and ML system operation (Ops).
-Key components include:
-\begin{itemize}
-    \item \textbf{Data Versioning:} Treating data like code (DVC).
-    \item \textbf{Model Registry:} Formalizing model stages (MLflow).
-    \item \textbf{Continuous Training (CT):} Automatically retraining when data drifts.
-\end{itemize}
+When trained on imbalanced data, most classifiers will optimize for overall accuracy by learning to predict the majority class almost exclusively. A trivial model that predicts ``good payer'' for every application would achieve ninety-five percent accuracy yet provide absolutely no value for risk management. The model would fail to identify the very cases that matter most—the potential defaulters who could cause financial losses.
+
+Various techniques exist to address this challenge. Some approaches modify the training data through oversampling the minority class or undersampling the majority class. Others adjust the loss function to penalize misclassification of the minority class more heavily. The choice of technique depends on the specific dataset and business requirements.
+
+\section{The Rise of MLOps}
+
+A pivotal moment in the machine learning industry occurred with the publication of Google's paper titled ``Hidden Technical Debt in Machine Learning Systems.'' This research demonstrated that in production machine learning systems, the actual machine learning code represents only a small fraction of the overall codebase. The vast majority consists of infrastructure for data collection, feature extraction, configuration management, serving, and monitoring.
+
+This insight gave rise to MLOps, a discipline that applies DevOps principles to machine learning systems. Just as DevOps unified software development and IT operations to enable continuous delivery of traditional applications, MLOps aims to unify machine learning development with production operations. The goal is to reduce the friction between data scientists who build models and the engineering teams responsible for deploying and maintaining them.
+
+Key components of an MLOps practice include data versioning, which treats datasets with the same rigor as source code. When data changes, the system should track what changed, when, and why. Experiment tracking provides similar rigor for model training, recording hyperparameters, metrics, and artifacts for every training run. A model registry formalizes the lifecycle of models through stages such as development, staging, and production. Continuous training extends continuous integration to include automated retraining when data drift is detected or on a scheduled basis.
+
+\section{Generative AI in Financial Services}
+
+The emergence of Large Language Models such as GPT-5 and Google Gemini 3 Pro has opened new possibilities for human-computer interaction. These models can generate coherent, contextually appropriate text that was previously possible only through human effort. In financial services, this capability enables a shift from purely algorithmic outputs to natural language explanations.
+
+Rather than presenting users with a numerical risk score or a binary approval decision, systems can now generate personalized explanations in natural language. A rejection is no longer simply ``Application Denied'' but can become a constructive explanation of the factors that influenced the decision and suggestions for how the applicant might improve their profile. This transformation from punitive rejection to constructive advisory represents a significant improvement in user experience.
+
+It is important to note that in this application, the generative AI component does not participate in the risk assessment itself. The credit decision remains the domain of the traditional machine learning model, where reliability and consistency are paramount. The language model serves as an interpretation layer, translating the structured output of the scoring system into natural language that users can understand and act upon.

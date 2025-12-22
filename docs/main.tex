@@ -7,15 +7,14 @@
 \usepackage{graphicx}
 \usepackage{geometry}
 \usepackage{hyperref}
-% \usepackage{titlesec}
-% \usepackage{fancyhdr}
 \usepackage{xcolor}
 \usepackage{float}
 \usepackage{caption}
 \usepackage{subcaption}
 \usepackage{listings}
 \usepackage{array}
-% \usepackage{svg} % Uncomment if you have Inkscape installed for SVG icons
+\usepackage{booktabs}
+\usepackage{longtable}
 
 % Geometry Settings
 \geometry{
@@ -27,7 +26,6 @@
 }
 \linespread{1.3}
 
-
 % Graphics Path
 \graphicspath{{../assets/}{../screenshots/}}
 
@@ -38,16 +36,8 @@
     filecolor=magenta,      
     urlcolor=blue,
     pdftitle={Intelligent Credit Scoring API},
-    pdfauthor={Jeraidi Yassi, Hakim Mohammed, Touhami Otmane},
+    pdfauthor={JERAIDI Yassir, HAKIM Mohammed, TOUHAMI Otmane},
 }
-
-% Header and Footer Settings
-% \pagestyle{fancy}
-% \fancyhf{}
-% \fancyhead[L]{Credit Score API Report}
-% \fancyhead[R]{\thepage}
-% \renewcommand{\headrulewidth}{0.4pt}
-% \renewcommand{\footrulewidth}{0.4pt}
 
 % Code Listing Settings
 \definecolor{codegreen}{rgb}{0,0.6,0}
@@ -75,10 +65,6 @@
 }
 \lstset{style=mystyle}
 
-% Title Format
-% \titleformat{\chapter}[display]
-%   {\normalfont\bfseries}{}{0pt}{\Huge}
-
 \begin{document}
 
 %----------------------------------------------------------------------------------------
@@ -96,29 +82,35 @@
         {\Large \textbf{Hassan II University of Casablanca}} \\
         {\Large \textbf{ENSET Mohammedia}} \\
         
+        \vspace{0.5cm}
+        {\large Department of Math and Computer Science} \\
+        {\large Master: Distributed Systems and Artificial Intelligence}
+        
         \vspace{2cm}
         
         {\Huge \textbf{Intelligent Credit Scoring API}} \\
         \vspace{0.5cm}
-        {\Large End-to-End MLOps Platform with Explainable AI & GenAI Integration}
+        {\Large End-to-End MLOps Platform with GenAI Integration}
         
         \vspace{2cm}
         
         \textbf{Authors:} \\
-        Jeraidi Yassi \\
-        Hakim Mohammed \\
-        Touhami Otmane
+        JERAIDI Yassir \\
+        HAKIM Mohamed \\
+        TOUHAMI Otmane
         
         \vspace{1cm}
         
         \textbf{Supervisor:} \\
-        M. Soufiane HAMIDA
+        Pr. Soufiane HAMIDA
         
-        \vspace{2cm}
+        \vspace{1.5cm}
+        
+        {\large Module: DevOps \& MLOps}
         
         \vfill
         
-        {\large Academic Year 2024-2025}
+        {\large Academic Year 2025-2026}
         
     \end{center}
 \end{titlepage}
@@ -132,8 +124,54 @@
 %	TABLE OF CONTENTS
 %----------------------------------------------------------------------------------------
 \tableofcontents
+\clearpage
+
+%----------------------------------------------------------------------------------------
+%	LIST OF FIGURES
+%----------------------------------------------------------------------------------------
 \listoffigures
-\newpage
+\clearpage
+
+%----------------------------------------------------------------------------------------
+%	LIST OF ABBREVIATIONS
+%----------------------------------------------------------------------------------------
+\chapter*{List of Abbreviations}
+\addcontentsline{toc}{chapter}{List of Abbreviations}
+
+\begin{longtable}{@{}p{3cm}p{10cm}@{}}
+\toprule
+\textbf{Abbreviation} & \textbf{Definition} \\
+\midrule
+\endhead
+
+API & Application Programming Interface \\
+AWS & Amazon Web Services \\
+CD & Continuous Deployment \\
+CI & Continuous Integration \\
+CML & Continuous Machine Learning \\
+CORS & Cross-Origin Resource Sharing \\
+CSV & Comma-Separated Values \\
+DVC & Data Version Control \\
+EC2 & Elastic Compute Cloud \\
+GDPR & General Data Protection Regulation \\
+GenAI & Generative Artificial Intelligence \\
+GHCR & GitHub Container Registry \\
+JWT & JSON Web Token \\
+LLM & Large Language Model \\
+ML & Machine Learning \\
+MLOps & Machine Learning Operations \\
+REST & Representational State Transfer \\
+ROC AUC & Receiver Operating Characteristic Area Under Curve \\
+S3 & Simple Storage Service \\
+SDK & Software Development Kit \\
+SHA & Secure Hash Algorithm \\
+SSH & Secure Shell \\
+SSR & Server-Side Rendering \\
+UI & User Interface \\
+
+\bottomrule
+\end{longtable}
+\clearpage
 
 %----------------------------------------------------------------------------------------
 %	CHAPTERS
@@ -153,4 +191,3 @@
 \input{chapters/08_appendix}
 
 \end{document}
-

@@ -1,61 +1,63 @@
 \chapter{Approach \& Methodology}
 
-This chapter details the rigorous data science methodology applied to build the credit scoring engine. We adhered to the CRISM-DM (Cross-Industry Standard Process for Data Mining) lifecycle, adapted for modern MLOps.
+This chapter details the data science methodology applied to build the credit scoring engine. The approach emphasizes reproducibility and integration with the MLOps infrastructure, ensuring that every experiment can be tracked and every decision can be justified.
 
-\section{Data Acquisition \& Analysis}
-The dataset used simulates real-world credit data, containing a mix of demographic and financial features.
+\section{Data Strategy}
+
+\subsection{Synthetic Data Generation}
+
+A critical decision in this project was the use of synthetic data rather than real credit applications. This choice was motivated by regulatory considerations, particularly the General Data Protection Regulation (GDPR), which imposes strict requirements on the processing of personal financial information. Real credit data would require explicit consent, careful anonymization, and robust security measures that extend beyond the scope of a demonstration project.
+
+The synthetic data generator creates realistic credit applications by modeling the statistical relationships observed in actual lending portfolios. Each generated application contains a mix of demographic and financial attributes that together determine the likelihood of default. The generation process uses a fixed random seed to ensure reproducibility, meaning the same dataset can be regenerated on any machine.
 
 \subsection{Feature Dictionary}
-The key features used for prediction include:
-\begin{itemize}
-    \item \textbf{person\_age}: Age of the applicant. Younger applicants often pose higher risk due to limited credit history.
-    \item \textbf{person\_income}: Annual income. The primary indicator of repayment capacity.
-    \item \textbf{person\_home\_ownership}: Categorical (RENT, OWN, MORTGAGE). Homeowners are statistically less likely to default.
-    \item \textbf{loan\_intent}: Purpose of the loan (EDUCATION, MEDICAL, VENTURE).
-    \item \textbf{loan\_grade}: External credit grade (A to G).
-    \item \textbf{loan\_amnt}: Requested loan amount.
-    \item \textbf{loan\_int\_rate}: Interest rate. Higher rates often correlate with higher risk profiles.
-    \item \textbf{loan\_status}: The target variable (0: Non-Default, 1: Default).
-    \item \textbf{cb\_person\_default\_on\_file}: Historical default record (Y/N).
-\end{itemize}
+
+The model operates on ten features that capture the essential aspects of a credit application. Eight of these features are numerical, representing measurable quantities, while two are categorical, representing discrete categories.
+
+The numerical features begin with age, representing the applicant's age in years, constrained between eighteen and one hundred. Income captures annual earnings in currency units, serving as the primary indicator of repayment capacity. Employment length measures years in the current or most recent position, indicating job stability. Loan amount specifies the requested credit, which directly influences the lender's exposure.
+
+Credit history length indicates how many years the applicant has maintained credit accounts, serving as a proxy for financial experience. The number of credit lines counts active credit accounts, with moderate values typically indicating responsible credit usage. Derogatory marks count negative entries on the credit report such as late payments or collections. Total debt aggregates existing obligations, which combined with income determines the debt-to-income ratio.
+
+The categorical features include loan intent, which specifies the purpose of the loan and takes values such as PERSONAL, EDUCATION, MEDICAL, VENTURE, HOMEIMPROVEMENT, or DEBTCONSOLIDATION. Home ownership indicates housing status as RENT, OWN, MORTGAGE, or OTHER, with homeowners generally presenting lower risk profiles.
+
+\subsection{Target Variable Generation}
+
+The target variable indicates whether an application should be approved or rejected, encoded as zero for approval and one for rejection. Rather than using random assignment, the generator applies deterministic business rules that reflect realistic risk factors.
+
+The rules implement a risk score system where certain conditions add to the risk while others subtract. A debt-to-income ratio exceeding forty-five percent strongly indicates rejection. A loan-to-income ratio above thirty-five percent adds moderate risk. Two or more derogatory marks significantly increase rejection probability. Short credit history combined with a large loan request elevates risk, as does renting with a high debt-to-income ratio. Conversely, long employment tenure and home ownership reduce the risk score.
+
+Applications with a cumulative risk score exceeding a threshold are marked for rejection. This deterministic approach creates clear decision boundaries that a tree-based model can learn effectively, resulting in high accuracy on the synthetic data.
 
 \section{Preprocessing Pipeline}
-Raw data is rarely ready for ML algorithms. We implemented a robust preprocessing pipeline using \texttt{Scikit-Learn} pipelines.
 
-\subsection{Handling Imbalanced Data}
-As noted in the Context chapter, defaults are rare events (typically < 20\% of data). Training on this directly would lead to a biased model that predicts "No Default" for everyone to achieve high accuracy.
-To counter this, we applied \textbf{SMOTE (Synthetic Minority Over-sampling Technique)}. SMOTE generates synthetic examples in the feature space of the minority class, effectively balancing the training set distribution to 50/50.
+Raw data requires transformation before machine learning algorithms can process it effectively. The preprocessing pipeline, implemented using scikit-learn's Pipeline and ColumnTransformer classes, applies appropriate transformations to each feature type.
 
-\subsection{Feature Engineering}
-\begin{itemize}
-    \item \textbf{One-Hot Encoding:} Applied to nominal variables like \texttt{loan\_intent} and \texttt{person\_home\_ownership}.
-    \item \textbf{Ordinal Encoding:} Applied to \texttt{loan\_grade} preserving the rank order (A > B > C).
-    \item \textbf{Scaling:} All numerical features were standardized using \texttt{StandardScaler} ($z = \frac{x - \mu}{\sigma}$) to prevent features with large magnitudes (like Income) from dominating the gradients.
-\end{itemize}
+Numerical features undergo standardization using the StandardScaler, which centers each feature around zero and scales it to unit variance. This transformation ensures that features with large magnitudes, such as income measured in tens of thousands, do not dominate features with small scales, such as the number of credit lines. The standardization formula subtracts the mean and divides by the standard deviation: $z = \frac{x - \mu}{\sigma}$.
 
-\section{Model Selection Strategy}
-We evaluated several candidate families of algorithms.
+Categorical features are transformed using one-hot encoding, which converts each category into a binary vector. The OneHotEncoder is configured to drop the first category for each feature, avoiding the dummy variable trap that would otherwise introduce perfect multicollinearity. Unknown categories encountered during inference are handled gracefully through the ignore setting, ensuring the model does not fail on unexpected inputs.
 
-\subsection{Baseline: Logistic Regression}
-A simple linear model used to establish a performance baseline. It is highly interpretable but fails to capture non-linear relationships between income, age, and risk.
+\section{Model Selection}
 
-\subsection{Candidate: Neural Networks (Deep Learning)}
-While powerful for unstructured data (images, text), Deep Learning often underperforms on tabular data compared to tree ensembles and requires significantly more data and tuning.
+\subsection{Choosing Gradient Boosting}
 
-\subsection{Selected: Gradient Boosting (XGBoost)}
-We selected \textbf{XGBoost} (Extreme Gradient Boosting) as our production model.
-\textbf{Justification:}
-\begin{enumerate}
-    \item \textbf{Performance:} consistently achieves state-of-the-art results on structured/tabular datasets.
-    \item \textbf{Handling Missing Data:} has built-in mechanisms to handle sparsity.
-    \item \textbf{Explainability:} compatible with TreeSHAP for exact Shapley value calculation.
-\end{enumerate}
+The production model employs the Gradient Boosting Classifier from scikit-learn, a decision that reflects the characteristics of structured tabular data. Gradient boosting algorithms consistently achieve state-of-the-art performance on tabular datasets, often outperforming both simpler linear models and more complex deep learning approaches.
 
-\section{Hyperparameter Tuning}
-We utilized \texttt{GridSearchCV} to optimize key parameters:
-\begin{itemize}
-    \item \texttt{n\_estimators}: Number of boosting rounds.
-    \item \texttt{max\_depth}: Maximum depth of a tree (control overfitting).
-    \item \texttt{learning\_rate}: Step size shrinkage to prevent overfitting.
-\end{itemize}
-All tuning experiments were tracked in MLflow to ensure the best configuration was selected for production.
+The algorithm works by training a sequence of decision trees, where each subsequent tree attempts to correct the errors of the ensemble so far. This sequential error correction allows the model to capture complex non-linear relationships and interactions between features. For credit scoring, this means the model can learn patterns such as ``high income mitigates the risk of a large loan amount'' without explicit feature engineering.
+
+Alternative algorithms were considered during the design phase. Logistic regression offers simplicity and interpretability but cannot capture the non-linear patterns present in credit data. Neural networks, while powerful for unstructured data like images and text, typically underperform on tabular data and require significantly more training data and hyperparameter tuning. Random forests offer similar capabilities to gradient boosting but generally achieve slightly lower accuracy due to the independent training of trees rather than sequential correction.
+
+\subsection{Hyperparameter Configuration}
+
+The model is configured with carefully selected hyperparameters that balance accuracy with computational efficiency. The ensemble consists of three hundred boosting stages, each adding a new tree to correct residual errors. The maximum depth of eight limits individual tree complexity, reducing the risk of overfitting while maintaining sufficient capacity to learn patterns.
+
+The learning rate of 0.1 controls the contribution of each tree to the ensemble, with smaller values generally requiring more trees but producing more robust models. The minimum samples per split and per leaf are both set to five, preventing the algorithm from creating splits based on too few observations. Subsampling at eighty percent introduces stochasticity that improves generalization by creating diversity among trees.
+
+All hyperparameters are logged to MLflow during training, enabling comparison across experiments and ensuring that the production model's configuration is fully documented.
+
+\section{Training Workflow}
+
+The complete training workflow integrates with MLflow to track every aspect of the experiment. When training begins, the script logs all hyperparameters and data statistics. As training proceeds, the model learns from eighty percent of the data while reserving twenty percent for evaluation.
+
+After training completes, the pipeline evaluates performance on the held-out test set, computing accuracy, precision, recall, F1 score, and ROC AUC. These metrics are logged to MLflow alongside artifacts such as the confusion matrix and classification report. The serialized model is registered in the Model Registry, where it can be reviewed before promotion to production.
+
+This workflow ensures that every production model can be traced back to its training run, with full visibility into the data used, parameters selected, and metrics achieved.

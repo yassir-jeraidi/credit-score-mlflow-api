@@ -1,24 +1,27 @@
 \chapter{Introduction}
 
 \section{Context}
-The financial services industry is undergoing a paradigm shift. With the advent of digital banking, the volume of loan applications has skyrocketed. Traditional methods of credit assessment, often relying on manual review by loan officers or static rule-based systems (scorecards), are proving inadequate. They are slow, inconsistent, and often fail to leverage the rich data available about applicants.
 
-Simultaneously, the regulatory landscape is tightening. Laws such as the GDPR in Europe mandate that automated decisions having legal effects on individuals—like credit denial—must be explainable. This creates a tension between the desire for high-accuracy Artificial Intelligence (AI) models and the legal necessity for transparency.
+The financial services industry is undergoing a profound transformation driven by digitalization. With the advent of online banking and fintech platforms, the volume of loan applications has increased dramatically, placing unprecedented pressure on traditional credit assessment processes. Manual review by loan officers, while thorough, cannot scale to meet modern demand. Static rule-based scoring systems, though faster, often fail to leverage the rich data available about applicants and cannot adapt to changing economic conditions.
+
+This transformation creates a compelling opportunity for machine learning systems that can process applications rapidly while maintaining accuracy. However, the journey from a trained model in a research notebook to a reliable production system serving real users presents significant engineering challenges. Data scientists and machine learning engineers often refer to this as the ``deployment gap''—the technical and organizational hurdles that prevent promising models from reaching production.
 
 \section{Problem Statement}
-Financial institutions face a "Black Box" dilemma:
-\begin{itemize}
-    \item \textbf{Performance vs. Transparency:} Advanced models like Neural Networks or Gradient Boosting Machines (GBM) offer superior predictive power compared to Logistic Regression. However, they are inherently opaque. A bank cannot simply tell a customer "The computer said no."
-    \item \textbf{Deployment Complexity:} Moving a model from a Jupyter Notebook to a production API that can handle concurrent requests is a complex engineering challenge, often referred to as the "Deployment Gap."
-    \item \textbf{Model Decay:} Unlike traditional software, ML models degrade over time as economic conditions change (Data Drift). A static model deployed once will essentially fail within months.
-\end{itemize}
+
+Financial institutions seeking to deploy machine learning for credit scoring face a multifaceted challenge. The first dimension concerns the technical complexity of building production-ready APIs that can handle concurrent requests, validate inputs rigorously, and return predictions with low latency. Unlike traditional software, machine learning systems require careful attention to model versioning, as the same codebase can produce different results depending on which model artifact is loaded.
+
+The second dimension involves the operational lifecycle of machine learning models. A model trained today may degrade over time as economic conditions shift and the statistical properties of incoming applications change, a phenomenon known as data drift. This necessitates continuous monitoring and the ability to retrain and redeploy models with minimal friction. Organizations that treat model deployment as a one-time event rather than an ongoing process inevitably encounter reliability issues.
+
+The third dimension relates to reproducibility and collaboration. Data science teams must be able to track experiments, compare model versions, and share datasets without ambiguity. Without proper tooling, the question ``which model is currently in production and what data was it trained on?'' becomes surprisingly difficult to answer.
 
 \section{Objectives}
-The primary objective of this project is to build an \textbf{Intelligent Credit Scoring API} that solves these challenges by bridging the gap between Data Science and Operations (MLOps).
-The specific goals are:
-\begin{enumerate}
-    \item \textbf{Develop a High-Recall Model:} Minimize financial risk by accurately identifying potential defaulters.
-    \item \textbf{Ensure Explainability (XAI):} Integrate layers of interpretability (SHAP) to provide textual reasons for every credit decision.
-    \item \textbf{Automate the Lifecycle:} Implement a full MLOps pipeline (CI/CD/CT) to ensure that the model can be retrained and redeployed automatically.
-    \item \textbf{Enhance User Experience:} leverage Generative AI (LLMs) to provide personalized financial advice based on the risk score, moving from a punitive "Rejection" to a constructive "Advisory" model.
-\end{enumerate}
+
+The primary objective of this project is to build an Intelligent Credit Scoring API that addresses these challenges by bridging the gap between Data Science and Operations, a discipline commonly known as MLOps. Rather than focusing solely on achieving the highest possible model accuracy, this project emphasizes the engineering practices required to deploy and maintain machine learning systems reliably.
+
+The first goal is to develop a functional machine learning pipeline that trains a classification model on credit application data and produces predictions suitable for approve/reject decisions. This pipeline should track all experiments, parameters, and metrics in a centralized system that allows comparison across training runs.
+
+The second goal is to create a production-ready REST API that serves model predictions with proper authentication, input validation, and error handling. This API should expose health check endpoints for operational monitoring and integrate seamlessly with the model registry to load the current production model.
+
+The third goal is to automate the entire lifecycle through continuous integration and continuous deployment pipelines. Code changes should trigger automated testing, and successful builds should result in container images that can be deployed to cloud infrastructure without manual intervention.
+
+The fourth goal is to enhance the user experience by integrating Generative AI capabilities. Rather than presenting users with a simple binary decision, the system should leverage large language models to provide contextual financial advice based on the assessment results.

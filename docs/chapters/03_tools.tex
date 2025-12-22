@@ -1,67 +1,71 @@
 \chapter{Tools \& Environments}
 
-This project relies on a state-of-the-art technological stack, meticulously chosen to
-ensure robustness, scalability, and developer productivity using the Best MLOps practices.
+This chapter presents the technological stack selected for the Credit Scoring platform. Each tool was chosen to address specific requirements of production machine learning systems, emphasizing reproducibility, scalability, and operational reliability.
 
-\section{Machine Learning \& Operations (MLOps)}
+\section{Machine Learning Operations}
 
-\subsection{DVC (Data Version Control)}
-In any ML project, data is as critical as code. We use \textbf{DVC} to version control our datasets.
-Unlike Git, which struggles with large binary files, DVC stores pointers to the actual data locations.
-\begin{itemize}
-    \item \textbf{Role:} Versioning the CSV datasets and tracking changes in the data pipeline.
-    \item \textbf{Storage:} We configured an AWS S3 bucket as the remote storage backend,
-    allowing the team to pull specific data versions (`dvc pull`) seamlessly.
-\end{itemize}
+\subsection{Data Version Control (DVC)}
+
+In machine learning projects, data holds equal importance to code. A model's behavior is determined not only by the training algorithm but also by the specific dataset used during training. Yet traditional version control systems like Git are poorly suited for large binary files such as CSV datasets or serialized model artifacts. DVC addresses this limitation by storing lightweight pointers in the Git repository while the actual data resides in remote storage.
+
+For this project, DVC is configured with an AWS S3 bucket as the remote backend. Team members can retrieve specific versions of the training data using the \texttt{dvc pull} command, ensuring that everyone works with identical datasets. When new data is generated or collected, \texttt{dvc push} uploads the files to S3 while Git tracks the corresponding metadata. This separation enables data versioning without bloating the repository or exceeding Git's file size limits.
 
 \subsection{MLflow}
-\textbf{MLflow} is the backbone of our experiment tracking and model lifecycle management.
-\begin{itemize}
-    \item \textbf{Tracking:} Every model training run logs parameters (hyperparameters),
-    metrics (Recall, AUC), and artifacts (serialized model files, confusion matrices) to the MLflow Tracking Server.
-    \item \textbf{Model Registry:} A centralized repository where models are staged, versioned,
-    and promoted to "Production". This decouples the training process from the consumption API.
-\end{itemize}
 
-\subsection{CML (Continuous Machine Learning)}
-To bring DevOps practices to Data Science, we utilize \textbf{CML}. CML enables us to generate
-visual reports (e.g., confusion matrices, precision-recall curves) directly inside GitHub Pull Requests.
-This ensures that no model regression is merged into the main branch.
+MLflow serves as the backbone of experiment tracking and model lifecycle management. The platform provides a unified interface for logging the parameters, metrics, and artifacts associated with each training run. When a data scientist experiments with different hyperparameter configurations, MLflow records everything automatically, eliminating the need for manual spreadsheets or ad-hoc logging.
 
-\section{Local \& Cloud Infrastructure}
+Beyond experiment tracking, MLflow provides a Model Registry that introduces formal lifecycle stages. A newly trained model begins in the ``None'' stage, may progress to ``Staging'' for validation, and eventually reaches ``Production'' when approved for serving. This formalization decouples the training process from the serving infrastructure. The API loads whatever model is currently in the Production stage, while data scientists can continue experimenting without affecting live predictions.
 
-\subsection{Docker \& Docker Compose}
-Containerization is key to reproducibility. We use \textbf{Docker} to package every service:
-\begin{itemize}
-    \item \textbf{API Container:} Runs the FastAPI backend.
-    \item \textbf{UI Container:} Runs the Next.js frontend.
-    \item \textbf{MLflow Container:} Runs the tracking server.
-\end{itemize}
-\textbf{Docker Compose} orchestrates these multi-container applications, defining networking, volumes, and environment variables in a single `docker-compose.yml` file.
+The project supports two MLflow deployment options. For local development and testing, the MLflow tracking server runs as a Docker container with a PostgreSQL database as the backend store. For production environments, the platform integrates with Databricks MLflow, providing enterprise-grade experiment tracking, model registry, and team collaboration features. The same training code works with both configurations by simply changing the \texttt{MLFLOW\_TRACKING\_URI} environment variable.
 
-\subsection{AWS (Amazon Web Services)}
-The platform is deployed on the cloud for global accessibility.
-\begin{itemize}
-    \item \textbf{EC2 (Elastic Compute Cloud):} We utilize EC2 instances to host our Dockerized application.
-    \item \textbf{S3 (Simple Storage Service):} Acts as the remote storage for DVC and MLflow artifacts.
-\end{itemize}
+\subsection{Continuous Machine Learning (CML)}
 
-\section{Backend \& Security}
+To bring DevOps practices into the data science workflow, the project integrates CML from Iterative. The CML pipeline is triggered automatically when changes are pushed to the machine learning directory or when a pull request is opened. Unlike traditional verification pipelines that use small data subsets, this implementation trains the complete production model using full datasets.
+
+The CML workflow begins by pulling the training data from DVC remote storage on AWS S3 using the \texttt{dvc pull} command. This ensures that the CI/CD environment uses the same versioned data as local development. The training script then executes with Databricks MLflow as the tracking backend, logging all parameters, metrics, and artifacts to the remote experiment server.
+
+After training completes, the pipeline generates visualization plots including loss evolution, accuracy evolution, F1 score evolution, and a confusion matrix. These plots are embedded in a CML report that is automatically posted as a comment on the pull request, providing reviewers with comprehensive insight into model performance before any code is merged.
+
+\section{Infrastructure}
+
+\subsection{Docker and Docker Compose}
+
+Containerization through Docker is fundamental to reproducibility. Each service in the application is packaged as a Docker image containing the exact dependencies, configurations, and runtime environment required. This eliminates the ``works on my machine'' problem that plagues traditional deployments.
+
+The project employs multi-stage Docker builds to optimize image size. The first stage installs build dependencies and compiles requirements, while the final stage copies only the necessary artifacts into a minimal runtime image. This approach significantly reduces the attack surface and accelerates container startup times.
+
+Docker Compose orchestrates the multi-container application, defining seven services: the PostgreSQL database, the MLflow tracking server, the FastAPI backend, the Next.js frontend, Prometheus for metrics collection, Grafana for visualization, and optional training jobs. A single \texttt{docker compose up} command brings the entire stack online with all networking and volume configurations handled automatically.
+
+\subsection{Amazon Web Services}
+
+The platform is deployed to AWS for production accessibility. An EC2 instance hosts the Docker Compose stack, providing compute resources for all containers. S3 serves dual purposes: storing DVC-tracked datasets and preserving MLflow artifacts such as serialized model files.
+
+GitHub Actions connects to the EC2 instance via SSH during deployment, pulling the latest container images and restarting services. This integration enables continuous deployment without manual intervention on the server.
+
+\section{Backend and Security}
 
 \subsection{FastAPI}
-Chosen for its high performance (based on Starlette and Pydantic) and automatic documentation features. FastAPI allows us to build asynchronous API endpoints that can handle concurrent requests efficiently, which is crucial for real-time inference.
 
-\subsection{JWT (JSON Web Tokens)}
-Security is paramount in financial applications. We implement stateless authentication using \textbf{JWT}. When a user logs in, they receive a signed token. This token must accompany every subsequent request to protected endpoints, ensuring that the API is secure against unauthorized access.
+FastAPI was selected for the backend due to its exceptional performance characteristics and developer experience. Built on Starlette for asynchronous request handling and Pydantic for data validation, FastAPI can process concurrent requests efficiently—a critical requirement for real-time inference workloads.
 
-\section{Frontend \& AI Integration}
+The framework automatically generates OpenAPI documentation, producing an interactive Swagger UI where developers can explore endpoints and test requests directly in the browser. Request and response schemas defined with Pydantic models appear in this documentation, reducing the need for separate API specification documents.
+
+\subsection{JWT Authentication}
+
+Security in financial applications is non-negotiable. The API implements stateless authentication using JSON Web Tokens. When users authenticate, the server generates a signed token containing their identity claims. Subsequent requests to protected endpoints must include this token in the Authorization header.
+
+The stateless nature of JWT authentication improves scalability because the server need not maintain session storage. Token verification requires only the secret key, allowing any instance of the API to validate requests independently. Password storage uses bcrypt hashing, ensuring that even a database breach would not expose plaintext credentials.
+
+\section{Frontend and AI Integration}
 
 \subsection{Next.js}
-The frontend is built with \textbf{Next.js}, a React framework that offers Server-Side Rendering (SSR) and static generation. This ensures fast load times and SEO optimization.
 
-\subsection{Vercel AI SDK \& Google Gemini}
-To go beyond simple scoring, we integrated a Conversational AI agent.
-\begin{itemize}
-    \item \textbf{Vercel AI SDK:} Provides the hooks (`useChat`) to manage chat state and streaming responses.
-    \item \textbf{Google Gemini:} A powerful Large Language Model (LLM) that powers the advisory chatbot. It analyzes the user's risk profile and offers personalized financial advice in natural language.
-\end{itemize}
+The frontend application is built with Next.js, a React framework that provides server-side rendering, static generation, and streamlined routing. These capabilities ensure fast initial page loads and strong search engine optimization, though the latter is less critical for an authenticated application.
+
+The App Router architecture in Next.js enables a clean separation between server and client components, optimizing bundle sizes by keeping server-only code out of the browser. The UI employs Radix primitives for accessible, unstyled components and Tailwind CSS for styling.
+
+\subsection{Vercel AI SDK and Google Gemini}
+
+To move beyond binary credit decisions toward constructive advice, the frontend integrates a conversational AI interface. The Vercel AI SDK provides React hooks such as \texttt{useChat} that manage conversation state and stream responses token by token, creating a responsive chat experience.
+
+The underlying language model is Google Gemini, accessed through the Vercel AI SDK's provider abstraction. When users inquire about their assessment, the system constructs a prompt containing their application details and the model's prediction, then streams Gemini's natural language response to the interface. This integration transforms the application from a scoring calculator into a virtual financial advisor.

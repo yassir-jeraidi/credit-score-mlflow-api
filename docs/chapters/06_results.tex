@@ -1,27 +1,103 @@
 \chapter{Results \& Discussion}
 
-\section{Model Performance Analysis}
-The primary goal of the ML model was to maximize Recall for the "Default" class (Risk=1).
-\begin{itemize}
-    \item \textbf{Recall:} Our XGBoost model achieved a recall of 0.89. This means it successfully identifies 89\% of all actual defaulters.
-    \item \textbf{Precision:} The precision stands at 0.78. While lower than recall, this trade-off is acceptable in risk management where the cost of a False Negative (missing a defaulter) is much higher than a False Positive (checking a good payer).
-\end{itemize}
+This chapter presents the outcomes of the Credit Scoring platform development, examining the machine learning model's performance through quantitative metrics, training evolution graphs, and operational system characteristics.
+
+\section{Model Performance Metrics}
+
+The Gradient Boosting Classifier was trained on fifty thousand synthetic credit applications, with twenty percent held out for evaluation. The model demonstrates exceptional performance on this dataset, achieving metrics that significantly exceed the minimum thresholds defined for production deployment.
+
+The final evaluation results show remarkable accuracy across all metrics. The model achieves an overall accuracy of 98.09\%, meaning it correctly classifies nearly all credit applications. Precision stands at 98.11\%, indicating that when the model predicts a rejection, it is almost always correct. Recall reaches 98.13\%, demonstrating that the model successfully identifies the vast majority of actual high-risk applicants. The F1 score, which provides a harmonic mean of precision and recall, measures 98.12\%. Perhaps most impressively, the ROC AUC score of 0.9986 indicates near-perfect discrimination between approved and rejected applications across all classification thresholds.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|c|}
+\hline
+\textbf{Metric} & \textbf{Value} \\
+\hline
+Accuracy & 98.09\% \\
+Precision & 98.11\% \\
+Recall & 98.13\% \\
+F1 Score & 98.12\% \\
+ROC AUC & 0.9986 \\
+\hline
+\end{tabular}
+\caption{Final Model Performance Metrics}
+\label{tab:metrics}
+\end{table}
+
+\section{Confusion Matrix Analysis}
+
+The confusion matrix provides insight into the model's classification behavior across both classes. Analysis of the matrix reveals a balanced performance between identifying approved and rejected applications.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\textwidth]{mlflow-experiments-metrics.png}
-    \caption{Training Metrics: Recall vs Precision visualized in MLflow}
-    \label{fig:metrics_graph}
+    \includegraphics[width=0.6\textwidth]{confusion-matrix.png}
+    \caption{Confusion Matrix showing classification results}
+    \label{fig:confusion_matrix}
 \end{figure}
 
-\section{System Performance & Monitoring}
-Beyond appropriate model metrics, we monitor the operational health of the API using \textbf{Prometheus} and \textbf{Grafana}.
-Figure \ref{fig:grafana} shows the real-time dashboard tracking:
-\begin{itemize}
-    \item \textbf{Request Rate:} Number of predictions per second.
-    \item \textbf{Latency:} Time taken to serve a prediction (avg. < 100ms).
-    \item \textbf{Model Drift:} Statistical deviation in input data distributions.
-\end{itemize}
+The confusion matrix breakdown shows 4,820 true negatives representing correctly approved applications, and 4,989 true positives representing correctly rejected high-risk applications. The model produces only 96 false positives, where low-risk applicants were incorrectly flagged, and 95 false negatives, where high-risk applicants were missed. The near-symmetry between false positives and false negatives indicates the model is not biased toward either approving or rejecting applications indiscriminately.
+
+\section{Training Evolution Analysis}
+
+The training process was monitored across 300 boosting stages, with metrics recorded at each stage to understand the model's learning behavior.
+
+\subsection{Accuracy Evolution}
+
+Figure \ref{fig:accuracy_evolution} shows how accuracy evolves during training. The model learns very quickly, with accuracy jumping from approximately 82.5\% to over 95\% within the first 25 stages. The training accuracy continues to climb until it reaches near-perfect performance, while the testing accuracy plateaus around stage 100 at approximately 98\%. The small gap between training and testing accuracy indicates minimal overfitting, and the stable test accuracy demonstrates strong generalization capability.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{accuracy.png}
+    \caption{Accuracy Evolution: Training vs Testing across boosting stages}
+    \label{fig:accuracy_evolution}
+\end{figure}
+
+\subsection{F1 Score Evolution}
+
+The F1 score evolution mirrors the accuracy graph closely, as shown in Figure \ref{fig:f1_evolution}. Both training and testing F1 scores start low and rise rapidly, with the test F1 stabilizing around 98\%. The similarity between the accuracy and F1 graphs indicates a well-balanced dataset where neither class dominates, which is confirmed by the nearly equal distribution in the confusion matrix.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{f1-score.png}
+    \caption{F1 Score Evolution: Training vs Testing across boosting stages}
+    \label{fig:f1_evolution}
+\end{figure}
+
+\subsection{Loss Function Convergence}
+
+Figure \ref{fig:loss_evolution} demonstrates the model's convergence through the loss function. The training loss starts high at approximately 1.3 and drops smoothly to near zero. The testing loss starts lower at approximately 0.6 and flattens out near zero. The smooth convergence curve suggests the learning rate was appropriately configured. Importantly, the test loss does not increase at the end of training, proving the model avoids catastrophic overfitting despite the training accuracy reaching near-perfect levels.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{loss.png}
+    \caption{Loss Evolution: Training and Test loss convergence}
+    \label{fig:loss_evolution}
+\end{figure}
+
+\section{MLflow Remote Tracking}
+
+The model training experiments are tracked using MLflow, with a remote tracking server hosted on Databricks. This provides centralized experiment management, model versioning, and a registry for production deployment.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{mlflow-remote-model-metrics.jpeg}
+    \caption{MLflow Remote: Model metrics tracked in Databricks}
+    \label{fig:mlflow_remote_metrics}
+\end{figure}
+
+The MLflow Model Registry maintains version history and lifecycle stages, enabling controlled promotion from staging to production. Figure \ref{fig:mlflow_remote_versions} shows the model versions registered in the remote MLflow server.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{mlflow-model-versions-remote.jpeg}
+    \caption{MLflow Remote: Model versions in Databricks Model Registry}
+    \label{fig:mlflow_remote_versions}
+\end{figure}
+
+\section{System Performance and Monitoring}
+
+Beyond model metrics, the platform monitors operational health using Prometheus and Grafana. Figure \ref{fig:grafana} shows the real-time dashboard tracking request rates, latencies, and prediction outcomes.
 
 \begin{figure}[H]
     \centering
@@ -30,12 +106,14 @@ Figure \ref{fig:grafana} shows the real-time dashboard tracking:
     \label{fig:grafana}
 \end{figure}
 
+The Prometheus integration tracks HTTP request metrics including total request count by endpoint and status code. Prediction-specific metrics count approved and rejected decisions, enabling analysis of model behavior in production.
+
 \begin{figure}[H]
     \centering
     \begin{subfigure}[b]{0.45\textwidth}
         \centering
         \includegraphics[width=\textwidth]{prometheus-predictions-total-graph.png}
-        \caption{Total Predictions Over Time}
+        \caption{Predictions Over Time}
     \end{subfigure}
     \hfill
     \begin{subfigure}[b]{0.45\textwidth}
@@ -46,3 +124,11 @@ Figure \ref{fig:grafana} shows the real-time dashboard tracking:
     \caption{Prometheus Metrics Visualization}
     \label{fig:prometheus}
 \end{figure}
+
+\section{Discussion}
+
+The results demonstrate that the Credit Scoring platform achieves exceptional performance across all evaluation criteria. The 98.09\% accuracy significantly exceeds the minimum threshold of 70\% defined for production deployment. The balanced false positive and false negative rates indicate the model is suitable for real-world credit decisions where both incorrectly approving risky applicants and incorrectly rejecting qualified applicants have business consequences.
+
+The training evolution graphs confirm that the Gradient Boosting algorithm converges smoothly without overfitting, validating the hyperparameter choices. The integration with Databricks MLflow provides enterprise-grade experiment tracking and model management, while Prometheus and Grafana deliver the observability required for production operations.
+
+The synthetic data generation approach proved effective for demonstrating the complete pipeline while avoiding regulatory complications. For production deployment with real data, the same infrastructure components would remain unchanged, demonstrating the value of the MLOps approach in enabling this transition.

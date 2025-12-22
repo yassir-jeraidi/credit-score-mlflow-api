@@ -1,61 +1,103 @@
 \chapter{Implementation \& Architecture}
 
-This chapter details the technical realization of the Credit Scoring platform. It serves as a mirror of the project's codebase, traversing from the high-level system design down to the specific implementations of the backend, frontend, and DevOps pipelines.
+This chapter provides a detailed examination of the Credit Scoring platform's technical realization. The discussion traverses from high-level system design through specific implementations of the backend, frontend, and DevOps infrastructure.
 
-\section{Global Architecture}
-The system architecture follows a microservices-oriented design, ensuring separation of concerns and independent scalability.
+\section{System Architecture}
+
+The platform utilizes a microservices-oriented architecture designed to separate concerns and enable the independent scaling of components. The entire system is containerized using Docker, where each service runs in an isolated environment but communicates via a dedicated bridge network. This infrastructure is supported by a robust Continuous Integration and Continuous Deployment pipeline managed by GitHub Actions.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=1.0\textwidth]{architecture.jpeg}
-    \caption{Global High-Level System Architecture}
+    \caption{High-Level System Architecture}
     \label{fig:global_arch}
 \end{figure}
 
-As illustrated in Figure \ref{fig:global_arch}, the workflow is as follows:
-\begin{enumerate}
-    \item \textbf{User Interface (Client):} The user interacts with the Next.js web application.
-    \item \textbf{API Gateway (FastAPI):} Requests are routed to the Backend API. This layer handles Authentication (JWT) and Input Validation.
-    \item \textbf{ML Engine:} Validated data is passed to the ML Service, which loads the latest model from the MLflow Registry.
-    \item \textbf{Inference:} The model computes the default probability and SHAP values.
-    \item \textbf{Monitoring:} Metrics are scraped by Prometheus and visualized in Grafana.
-\end{enumerate}
+Development workflows are streamlined using Data Version Control to synchronize large datasets with AWS S3, while Continuous Machine Learning generates automated model performance reports during pull requests. Once builds are validated, Docker images are pushed to the GitHub Container Registry and automatically deployed to an AWS EC2 instance via SSH.
 
-\section{Backend Implementation (FastAPI)}
-The backend is the orchestrator of the system. It exposes RESTful endpoints for prediction, authentication, and health checks.
+User interaction is handled by a Next.js web application that serves as the secure interface for credit assessments. A distinguishing feature of the frontend is its integration with Google Gemini, which enables conversational interaction and personalized financial advice based on assessment results. User requests are transmitted to the backend over a secure channel authenticated by JSON Web Tokens, ensuring that only authorized requests reach the core processing logic.
 
-\subsection{API Documentation & Schemas}
-Thanks to FastAPI, we automatically generate interactive Swagger UI documentation. This allows developers to test endpoints directly.
+The backend is powered by FastAPI, which validates incoming requests against strict Pydantic schemas before forwarding them to the machine learning engine. The system integrates directly with an MLflow Tracking Server to retrieve the specific model version currently tagged for production. By decoupling the model registry from the application logic, the system ensures that credit decisions are always made using the most up-to-date and validated algorithms. All model metadata and experiment tracking details are persistently stored in a PostgreSQL database to maintain a complete audit trail.
+
+To ensure high availability and performance reliability, the architecture includes a dedicated observability stack. A Prometheus instance operates as a metrics scraper, collecting real-time telemetry from the backend such as request rates, latency, and prediction outcomes. These metrics are fed into Grafana, which provides operational dashboards that allow administrators to visualize system health and detect potential issues the moment they occur.
+
+\section{Backend Implementation}
+
+The FastAPI backend serves as the central orchestrator of the system, exposing RESTful endpoints for authentication, health monitoring, model information, and predictions.
+
+\subsection{API Documentation and Validation}
+
+One of FastAPI's most valuable features is automatic documentation generation. Without additional configuration, the framework produces an interactive Swagger UI that developers can use to explore endpoints, examine request and response schemas, and test the API directly from the browser.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.9\textwidth]{api-docs-swagger-1.png}
-    \caption{FastAPI Swagger Documentation - Auth & Health Endpoints}
+    \caption{FastAPI Swagger Documentation showing Authentication and Health Endpoints}
     \label{fig:swagger_auth}
 \end{figure}
 
-The \texttt{/predict} endpoint (Figure \ref{fig:swagger_predict}) accepts a structured JSON payload defined by Pydantic models. This ensures that data such as `person\_age` or `loan\_int\_rate` matches the expected types before reaching the model.
+The authentication endpoints enable user registration and login. New users create accounts by submitting their email and password to the registration endpoint, which hashes the password using bcrypt before storing it in PostgreSQL. The login endpoint accepts credentials via OAuth2 password flow and returns a signed JWT token upon successful authentication.
+
+The prediction endpoint accepts a structured JSON payload whose schema is defined by Pydantic models. Each field includes validation constraints that ensure incoming data meets expectations before reaching the model. The age field, for example, must be an integer between eighteen and one hundred, while income must be a positive floating-point number. Invalid requests receive immediate rejection with clear error messages, preventing malformed data from causing downstream failures.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.9\textwidth]{api-test-predict-swagger.png}
-    \caption{Prediction Endpoint Testing with Input Payload}
+    \caption{Prediction Endpoint with Input Payload Validation}
     \label{fig:swagger_predict}
 \end{figure}
 
-\subsection{Secure Authentication}
-We implemented a robust JWT-based authentication flow. Users must register and login to receive a `Check Token`. This token is stateless, meaning the server does not need to store session data, improving scalability.
+\subsection{Health and Readiness Endpoints}
 
-\section{Frontend \& GenAI Integration (Next.js)}
-The frontend is designed to be intuitive and responsive. It connects to the backend API to fetch credit scores and to the Google Gemini API for advisory services.
+Production systems require mechanisms for orchestrators and load balancers to assess service health. The API exposes two health endpoints serving distinct purposes. The basic health endpoint returns immediately if the server is running, indicating liveness. The readiness endpoint performs deeper checks, verifying that the machine learning model is loaded and ready to serve predictions.
 
-\subsection{AI-Powered Chat Interface}
-Using the \textbf{Vercel AI SDK}, we built a streaming chat interface. The `useChat` hook manages the conversation state. When a user asks "Why was my loan rejected?", the system sends the user's profile and the model's SHAP output to Google Gemini. Gemini then generates a natural language explanation, acting as a virtual financial advisor.
+This distinction matters in containerized deployments. A service might be alive but not ready if the model is still loading from the registry. Kubernetes and similar orchestrators can use readiness probes to avoid routing traffic to instances that cannot yet serve predictions.
+
+\section{Frontend and Generative AI Integration}
+
+The Next.js frontend provides an intuitive interface for submitting credit applications and viewing results. Built with React 19 and styled with Tailwind CSS, the application prioritizes responsiveness and accessibility.
+
+\subsection{Authentication Flow}
+
+Users must authenticate before accessing prediction functionality. The login page collects credentials and submits them to the backend, receiving a JWT token on success. This token is stored in an HTTP-only cookie, protecting it from cross-site scripting attacks. A middleware layer intercepts requests to protected routes, redirecting unauthenticated users to the login page.
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{ui-login.png}
+        \caption{Login Interface}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{ui-create-account.png}
+        \caption{Account Registration}
+    \end{subfigure}
+    \caption{User Authentication Interfaces}
+    \label{fig:ui_auth}
+\end{figure}
+
+The session management logic uses the jose library to create and verify signed cookies server-side, ensuring that session state cannot be tampered with by clients. Sessions expire after seven days, at which point users must authenticate again.
+
+\subsection{AI-Powered Advisory}
+
+The integration of Google Gemini transforms the application from a simple scoring tool into an intelligent financial advisor. The Vercel AI SDK provides React hooks that manage conversation state and stream responses token by token, creating a responsive chat experience.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{ui-chat-page.png}
+    \caption{AI-Powered Chat Interface with Credit Assessment}
+    \label{fig:ui_chat}
+\end{figure}
+
+When users receive their credit assessment, they can engage with the AI assistant to understand the factors that influenced the decision and receive personalized advice. The system constructs prompts that include the user's application data and the model's prediction, enabling Gemini to generate contextually relevant responses. This capability represents a significant enhancement over traditional credit scoring systems that offer only binary outcomes without explanation.
 
 \section{MLOps Implementation}
 
-\subsection{Experiment Tracking with MLflow}
-Every training run is logged. Figure \ref{fig:mlflow_exp} shows the MLflow UI, where we can compare different runs based on their `run_id`.
+\subsection{Experiment Tracking}
+
+Every model training run is logged to the MLflow tracking server, creating a comprehensive record of experiments. The MLflow UI displays all runs with their parameters, metrics, and associated artifacts, enabling data scientists to compare approaches and identify the best-performing configurations.
 
 \begin{figure}[H]
     \centering
@@ -64,7 +106,7 @@ Every training run is logged. Figure \ref{fig:mlflow_exp} shows the MLflow UI, w
     \label{fig:mlflow_exp}
 \end{figure}
 
-Detailed metrics such as Confusion Matrices and ROC Curves are stored as artifacts (Figure \ref{fig:mlflow_artifacts}), allowing data scientists to diagnose model performance visually.
+Each experiment logs hyperparameters such as the number of estimators, maximum tree depth, and learning rate. Training and evaluation metrics including accuracy, precision, recall, F1 score, and ROC AUC are recorded upon completion. Artifacts such as the confusion matrix and classification report provide additional diagnostic information.
 
 \begin{figure}[H]
     \centering
@@ -73,8 +115,9 @@ Detailed metrics such as Confusion Matrices and ROC Curves are stored as artifac
     \label{fig:mlflow_artifacts}
 \end{figure}
 
-\subsection{Cloud Infrastructure & Containerization}
-The entire application stack is containerized. Figure \ref{fig:docker_containers} displays the running containers: API, UI, MLflow, and Postgres.
+\subsection{Container Orchestration}
+
+The Docker Compose configuration defines seven services that together constitute the complete platform. PostgreSQL provides persistent storage for both user data and the MLflow backend. The MLflow tracking server connects to this database and exposes its UI on port 5001. The FastAPI backend loads models from MLflow and serves predictions on port 8000.
 
 \begin{figure}[H]
     \centering
@@ -83,16 +126,15 @@ The entire application stack is containerized. Figure \ref{fig:docker_containers
     \label{fig:docker_containers}
 \end{figure}
 
-\section{Continuous Integration \& Deployment (CI/CD)}
-We utilize \textbf{GitHub Actions} to automate our software lifecycle.
+Prometheus and Grafana provide observability, while the Next.js frontend serves the user interface. Additional profiles enable on-demand training and data generation jobs that run within the same network, accessing shared services as needed.
+
+\section{Continuous Integration and Deployment}
+
+GitHub Actions automates the software lifecycle through three workflow files targeting different aspects of development and operations.
 
 \subsection{CI Pipeline}
-Upon every Push or Pull Request, the CI pipeline runs:
-\begin{itemize}
-    \item \textbf{Linting:} Checking code quality.
-    \item \textbf{Testing:} Running `pytest`.
-    \item \textbf{CML Report:} Training a simplified model and commenting the results directly on the PR.
-\end{itemize}
+
+The continuous integration workflow triggers on pushes to the main and development branches, as well as on pull requests. It builds Docker images for the API, UI, and MLflow server, pushing them to the GitHub Container Registry upon successful completion. Each image is tagged with the commit SHA, enabling precise version tracking.
 
 \begin{figure}[H]
     \centering
@@ -102,10 +144,25 @@ Upon every Push or Pull Request, the CI pipeline runs:
 \end{figure}
 
 \subsection{CD Pipeline}
-When code acts merged to the `main` branch, the CD pipeline triggers. It builds the Docker images, pushes them to the Container Registry (GHCR), and connects via SSH to the AWS EC2 instance to pull and restart the updated containers.
+
+The deployment workflow activates after successful CI completion on the main branch. It connects to the AWS EC2 instance via SSH, pulls the latest images from the container registry, and restarts the Docker Compose stack. Health checks verify that the API and UI are responding before the workflow completes, ensuring that deployments do not leave the system in a broken state.
+
+\subsection{CML Pipeline}
+
+The Continuous Machine Learning pipeline handles model training as part of the CI/CD process. When triggered, it first retrieves the training data from S3 using DVC, ensuring the same versioned dataset is used across all environments. The training script executes with Databricks as the MLflow tracking backend, logging parameters, metrics, and artifacts to the remote server.
+
+After training, the pipeline generates visualization plots including accuracy evolution, F1 score evolution, loss curves, and a confusion matrix. These visualizations are automatically embedded in a CML report posted as a comment on the pull request, enabling reviewers to assess model quality with comprehensive metrics before approving changes.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{github-actions-success-cml.png}
+    \caption{Successful CML Pipeline with Training Report}
+    \label{fig:cml_success}
+\end{figure}
 
 \section{Database Design}
-We use PostgreSQL to persist user data and application state.
+
+PostgreSQL serves as the persistent data store for both the application and MLflow. User records contain email addresses and bcrypt-hashed passwords, with creation timestamps for auditing. The MLflow backend tables track experiments, runs, parameters, metrics, and model versions.
 
 \begin{figure}[H]
     \centering
@@ -113,3 +170,5 @@ We use PostgreSQL to persist user data and application state.
     \caption{PostgreSQL Database Schema}
     \label{fig:db_schema}
 \end{figure}
+
+This shared database simplifies deployment while maintaining clear boundaries between application data and ML metadata.
