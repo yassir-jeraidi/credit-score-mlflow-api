@@ -232,18 +232,18 @@ def train_model(
 
         # Save Model
 
-        try:
-            logger.info(f"Saving model as '{MODEL_NAME}'...")
-            mlflow.sklearn.save_model(
-                MODEL_NAME,
-                "credit-score-catalog/credit-scoring/"
-            )
-            logger.info(f"Model saved successfully")
-        except Exception as e:
-            logger.warning(
-                f"Model Saving failed (model still logged): {e}\n"
-                "You can manually register the model from the Databricks UI."
-            )
+        # try:
+        #     logger.info(f"Saving model as '{MODEL_NAME}'...")
+        #     mlflow.sklearn.save_model(
+        #         MODEL_NAME,
+        #         "credit-score-catalog/credit-scoring/"
+        #     )
+        #     logger.info(f"Model saved successfully")
+        # except Exception as e:
+        #     logger.warning(
+        #         f"Model Saving failed (model still logged): {e}\n"
+        #         "You can manually register the model from the Databricks UI."
+        #     )
 
         # Generate and Log Plots
         try:
