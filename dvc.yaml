@@ -1,6 +1,8 @@
 stages:
   train:
-    cmd: python -m ml.cloud_train --mlflow-uri "$DATABRICKS_HOST"
+    cmd: >-
+      python -m ml.cloud_train
+      --mlflow-uri ${DATABRICKS_HOST}
     deps:
       - ml/
       - requirements.txt
