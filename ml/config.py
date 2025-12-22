@@ -41,9 +41,9 @@ HOME_OWNERSHIP_CATEGORIES: List[str] = [
 
 # Model hyperparameters - tuned for Gradient Boosting
 DEFAULT_MODEL_PARAMS: Dict[str, Any] = {
-    "n_estimators": 300,
+    "n_estimators": 250,
     "max_depth": 8,
-    "learning_rate": 0.1,
+    "learning_rate": 0.2,
     "min_samples_split": 5,
     "min_samples_leaf": 5,
     "max_features": "sqrt",
