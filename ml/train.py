@@ -199,6 +199,11 @@ def train_model(
             mlflow.log_metric(metric_name, metric_value)
             logger.info(f"{metric_name}: {metric_value:.4f}")
 
+        # Save metrics to file for CML report
+        import json
+        with open("metrics.json", "w") as f:
+            json.dump(metrics, f, indent=2)
+
         # Log confusion matrix
         y_pred = model.predict(X_test)
         cm = confusion_matrix(y_test, y_pred)

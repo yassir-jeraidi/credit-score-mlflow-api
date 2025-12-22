@@ -13,28 +13,15 @@ on:
       - "ml/**"
       - "requirements.txt"
   workflow_dispatch:
-    inputs:
-      n_samples:
-        description: "Number of training samples"
-        required: true
-        default: "1000"
-        type: string
-      full_training:
-        description: "Run full training (50k samples)"
-        required: false
-        default: false
-        type: boolean
+    # No inputs needed for simplified workflow
 
 env:
   PYTHON_VERSION: "3.11"
   AWS_DEFAULT_REGION: eu-west-3
 
 jobs:
-  # ===========================================================================
-  # Train Verification (Small Dataset)
-  # ===========================================================================
-  train-verification:
-    name: Training Verification
+  train-model:
+    name: Training Model
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -65,150 +52,26 @@ jobs:
         run: |
           dvc remote modify s3remote --local access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
           dvc remote modify s3remote --local secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
 
       - name: Pull data from DVC
         id: dvc_pull
-        run: |
-          if dvc pull; then
-            echo "dvc_success=true" >> $GITHUB_OUTPUT
-            echo "✅ Successfully pulled data from DVC"
-          else
-            echo "dvc_success=false" >> $GITHUB_OUTPUT
-            echo "⚠️ DVC pull failed, will generate fresh data"
-          fi
+        run: dvc pull
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         continue-on-error: true
 
-      - name: Determine sample size
-        id: samples
-        run: |
-          if [ "${{ github.event.inputs.full_training }}" == "true" ]; then
-            echo "n_samples=50000" >> $GITHUB_OUTPUT
-          elif [ -n "${{ github.event.inputs.n_samples }}" ]; then
-            echo "n_samples=${{ github.event.inputs.n_samples }}" >> $GITHUB_OUTPUT
-          else
-            echo "n_samples=1000" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Generate data (fallback if DVC pull failed)
-        if: steps.dvc_pull.outputs.dvc_success != 'true'
-        run: |
-          echo "Generating ${{ steps.samples.outputs.n_samples }} samples as fallback..."
-          python -m ml.data_generator --n-samples ${{ steps.samples.outputs.n_samples }} --seed 42
-          echo "Generated ${{ steps.samples.outputs.n_samples }} samples for training"
-        env:
-          PYTHONPATH: .
-
-      - name: Get actual sample count
-        id: actual_samples
-        run: |
-          ACTUAL=$(python -c "import pandas as pd; print(len(pd.read_csv('data/raw/credit_data.csv')))" 2>/dev/null || echo "unknown")
-          echo "count=$ACTUAL" >> $GITHUB_OUTPUT
-          echo "📊 Actual samples in data: $ACTUAL"
-        env:
-          PYTHONPATH: .
-
-      - name: Run training verification
+      - name: Train Model
         id: train
         run: |
-          # Create a local MLflow tracking directory
-          mkdir -p mlruns
-
-          # Run training with local MLflow and generate plots data
-          python -c "
-          import sys
-          sys.path.insert(0, '.')
-          from ml.train import create_model_pipeline, evaluate_model
-          from ml.data_generator import load_from_csv, split_data
-          from ml.config import TEST_SIZE, DEFAULT_MODEL_PARAMS
-          from sklearn.metrics import confusion_matrix, accuracy_score, f1_score, log_loss
-          import matplotlib
-          matplotlib.use('Agg')
-          import matplotlib.pyplot as plt
-          import seaborn as sns
-          import pandas as pd
-          import json
-
-          # Load data
-          df = load_from_csv()
-          X_train, X_test, y_train, y_test = split_data(df, test_size=TEST_SIZE)
-
-          print(f'Training data shape: {X_train.shape}')
-          print(f'Test data shape: {X_test.shape}')
-
-          # Create and train model
-          model = create_model_pipeline(DEFAULT_MODEL_PARAMS)
-          model.fit(X_train, y_train)
-
-          # Evaluate
-          metrics = evaluate_model(model, X_test, y_test)
-
-          # Print metrics
-          print('\\n=== Model Metrics ===')
-          for name, value in metrics.items():
-              print(f'{name}: {value:.4f}')
-
-          # Save metrics to file for CML report
-          with open('metrics.json', 'w') as f:
-              json.dump(metrics, f, indent=2)
-
-          # Generate Confusion Matrix
-          y_pred = model.predict(X_test)
-          cm = confusion_matrix(y_test, y_pred)
-          plt.figure(figsize=(8, 6))
-          sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=False)
-          plt.title('Confusion Matrix')
-          plt.ylabel('True Label')
-          plt.xlabel('Predicted Label')
-          plt.tight_layout()
-          plt.savefig('confusion_matrix.png')
-          plt.close()
-
-          # Generate Training History (Learning Curves)
-          clf = model.named_steps['classifier']
-          preprocessor = model.named_steps['preprocessor']
-          X_train_trans = preprocessor.transform(X_train)
-          X_test_trans = preprocessor.transform(X_test)
-
-          # Collect metrics per boosting stage
-          train_loss = list(clf.train_score_)
-          test_loss = []
-          train_acc = []
-          test_acc = []
-          train_f1 = []
-          test_f1 = []
-
-          for y_pred_stage in clf.staged_predict(X_test_trans):
-              test_acc.append(accuracy_score(y_test, y_pred_stage))
-              test_f1.append(f1_score(y_test, y_pred_stage))
-
-          for y_proba_stage in clf.staged_predict_proba(X_test_trans):
-              test_loss.append(log_loss(y_test, y_proba_stage))
-
-          for y_pred_stage in clf.staged_predict(X_train_trans):
-              train_acc.append(accuracy_score(y_train, y_pred_stage))
-              train_f1.append(f1_score(y_train, y_pred_stage))
-
-          # Save history
-          history_df = pd.DataFrame({
-              'stage': range(len(train_loss)),
-              'train_loss': train_loss,
-              'test_loss': test_loss,
-              'train_accuracy': train_acc,
-              'test_accuracy': test_acc,
-              'train_f1': train_f1,
-              'test_f1': test_f1
-          })
-          history_df.to_csv('training_history.csv', index=False)
-
-          print('\\n✅ Training verification and plots generation completed!')
-          "
+          python -m ml.train \
+            --mlflow-uri "${{ secrets.DATABRICKS_HOST }}" \
+            --register \
+            --promote
         env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
           PYTHONPATH: .
 
       - name: Validate model metrics
@@ -378,82 +241,3 @@ jobs:
             accuracy_graph.png
             f1_graph.png
             mlruns/
-
-  # ===========================================================================
-  # Data Validation
-  # ===========================================================================
-  data-validation:
-    name: Data Validation
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pandas numpy
-
-      - name: Validate data generation
-        run: |
-          python -c "
-          import sys
-          sys.path.insert(0, '.')
-          from ml.data_generator import generate_credit_data
-          from ml.config import NUMERICAL_FEATURES, CATEGORICAL_FEATURES
-
-          # Generate small sample
-          df = generate_credit_data(n_samples=100, random_state=42)
-
-          # Validate schema
-          expected_columns = NUMERICAL_FEATURES + CATEGORICAL_FEATURES + ['target']
-          missing = set(expected_columns) - set(df.columns)
-          extra = set(df.columns) - set(expected_columns)
-
-          if missing:
-              print(f'❌ Missing columns: {missing}')
-              sys.exit(1)
-          if extra:
-              print(f'⚠️ Extra columns: {extra}')
-
-          # Validate data types
-          print('✅ Schema validation passed')
-
-          # Validate no nulls
-          if df.isnull().any().any():
-              print('❌ Found null values')
-              sys.exit(1)
-          print('✅ No null values')
-
-          # Validate target distribution
-          target_dist = df['target'].value_counts(normalize=True)
-          print(f'Target distribution: {target_dist.to_dict()}')
-
-          # Check for reasonable class balance (not extremely imbalanced)
-          min_class_ratio = target_dist.min()
-          if min_class_ratio < 0.1:
-              print(f'⚠️ Warning: Class imbalance detected (min class: {min_class_ratio:.2%})')
-          else:
-              print('✅ Reasonable class balance')
-
-          print('\\n✅ All data validations passed!')
-          "
-        env:
-          PYTHONPATH: .
-
-  # ===========================================================================
-  # Model Code Quality
-  # ===========================================================================
-  ml-code-quality:
-    name: ML Code Quality
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Skip ML code quality checks (per request)
-        run: echo "ML lint/format checks skipped for this workflow."
