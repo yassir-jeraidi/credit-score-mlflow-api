@@ -215,12 +215,29 @@ def train_model(
         # Log Model
         logger.info("Logging model to MLflow...")
         signature = infer_signature(X_test, y_pred)
-        mlflow.sklearn.log_model(
+        
+        # First, log the model without registration
+        model_info = mlflow.sklearn.log_model(
             model,
             artifact_path="model",
-            registered_model_name=MODEL_NAME,
             signature=signature,
         )
+        logger.info(f"Model logged to: {model_info.model_uri}")
+        
+        # Then, register the model separately if requested
+        if register_model:
+            try:
+                logger.info(f"Registering model as '{MODEL_NAME}'...")
+                model_version = mlflow.register_model(
+                    model_uri=model_info.model_uri,
+                    name=MODEL_NAME,
+                )
+                logger.info(f"Registered model version: {model_version.version}")
+            except Exception as e:
+                logger.warning(
+                    f"Model registration failed (model still logged): {e}\n"
+                    "You can manually register the model from the Databricks UI."
+                )
 
         # Generate and Log Plots
         try:
@@ -243,8 +260,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--register", 
         action="store_true", 
-        default=True, 
-        help="Register model in MLflow Registry"
+        help="Register model in MLflow Registry (requires proper IAM permissions)"
     )
     parser.add_argument(
         "--data-path",

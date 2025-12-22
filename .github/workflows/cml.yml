@@ -61,11 +61,13 @@ jobs:
 
       - name: Train Model
         id: train
-        # Logs to Databricks MLflow and creates local artifacts for CML
+        # Logs to Databricks MLflow. Model registration is disabled by default
+        # due to IAM permission issues with Unity Catalog's S3 bucket.
+        # You can register the model manually from the Databricks UI.
+        # To enable registration, add --register flag (requires proper IAM setup).
         run: |
           python -m ml.train \
-            --mlflow-uri "${{ secrets.DATABRICKS_HOST }}" \
-            --register
+            --mlflow-uri "${{ secrets.DATABRICKS_HOST }}"
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
