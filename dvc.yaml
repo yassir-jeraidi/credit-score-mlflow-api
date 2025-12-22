@@ -20,22 +20,25 @@ stages:
     plots:
       - training_history.csv:
           x: stage
-          y: train_loss
+          y:
+            training_history.csv: [train_loss, test_loss]
+          title: "Loss Evolution"
+          x_label: "Stage"
+          y_label: "Loss"
       - training_history.csv:
           x: stage
-          y: test_loss
+          y:
+            training_history.csv: [train_accuracy, test_accuracy]
+          title: "Accuracy Evolution"
+          x_label: "Stage"
+          y_label: "Accuracy"
       - training_history.csv:
           x: stage
-          y: train_accuracy
-      - training_history.csv:
-          x: stage
-          y: test_accuracy
-      - training_history.csv:
-          x: stage
-          y: train_f1
-      - training_history.csv:
-          x: stage
-          y: test_f1
+          y:
+            training_history.csv: [train_f1, test_f1]
+          title: "F1 Score Evolution"
+          x_label: "Stage"
+          y_label: "F1 Score"
       - confusion_matrix.png
 
   evaluate:
