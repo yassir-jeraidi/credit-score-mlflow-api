@@ -6,7 +6,6 @@ Trains a credit scoring model and logs everything to MLflow.
 
 import logging
 import os
-import argparse
 from typing import Any, Dict, Optional
 
 import mlflow
@@ -23,18 +22,21 @@ from sklearn.metrics import (
     recall_score,
     roc_auc_score,
 )
-from mlflow.models import infer_signature
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from ml.config import (
     CATEGORICAL_FEATURES,
     DEFAULT_MODEL_PARAMS,
+    DEFAULT_SAMPLE_SIZE,
+    MLFLOW_EXPERIMENT_NAME,
+    MODEL_NAME,
     NUMERICAL_FEATURES,
     TEST_SIZE,
 )
 from ml.data_generator import (
     RAW_DATA_PATH,
+    generate_and_save_data,
     load_from_csv,
     split_data,
 )
@@ -43,12 +45,16 @@ from ml.data_generator import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-MODEL_NAME = "credit-score-catalog.credit-scoring.credit-score-model"
-
 
 def create_preprocessing_pipeline() -> ColumnTransformer:
-    """Create preprocessing pipeline for features."""
+    """
+    Create preprocessing pipeline for features.
+
+    Returns:
+        ColumnTransformer with numerical and categorical preprocessing
+    """
     numerical_transformer = StandardScaler()
+
     categorical_transformer = OneHotEncoder(
         drop="first", sparse_output=False, handle_unknown="ignore"
     )
@@ -60,29 +66,52 @@ def create_preprocessing_pipeline() -> ColumnTransformer:
         ],
         remainder="drop",
     )
+
     return preprocessor
 
 
 def create_model_pipeline(model_params: Optional[Dict[str, Any]] = None) -> Pipeline:
-    """Create full model pipeline with preprocessing and classifier."""
+    """
+    Create full model pipeline with preprocessing and classifier.
+
+    Args:
+        model_params: Optional model hyperparameters
+
+    Returns:
+        Sklearn Pipeline with preprocessor and classifier
+    """
     if model_params is None:
         model_params = DEFAULT_MODEL_PARAMS
 
     preprocessor = create_preprocessing_pipeline()
     classifier = GradientBoostingClassifier(**model_params)
 
-    return Pipeline([
-        ("preprocessor", preprocessor),
-        ("classifier", classifier),
-    ])
+    pipeline = Pipeline(
+        [
+            ("preprocessor", preprocessor),
+            ("classifier", classifier),
+        ]
+    )
+
+    return pipeline
 
 
 def evaluate_model(model: Pipeline, X_test: pd.DataFrame, y_test: pd.Series) -> Dict[str, float]:
-    """Evaluate model performance."""
+    """
+    Evaluate model performance.
+
+    Args:
+        model: Trained model pipeline
+        X_test: Test features
+        y_test: Test labels
+
+    Returns:
+        Dictionary of evaluation metrics
+    """
     y_pred = model.predict(X_test)
     y_proba = model.predict_proba(X_test)[:, 1]
 
-    return {
+    metrics = {
         "accuracy": accuracy_score(y_test, y_pred),
         "precision": precision_score(y_test, y_pred),
         "recall": recall_score(y_test, y_pred),
@@ -90,13 +119,152 @@ def evaluate_model(model: Pipeline, X_test: pd.DataFrame, y_test: pd.Series) -> 
         "roc_auc": roc_auc_score(y_test, y_proba),
     }
 
+    return metrics
 
-def save_plots(model: Pipeline, X_test: pd.DataFrame, y_test: pd.Series, 
-               X_train: pd.DataFrame, y_train: pd.Series, run_id: str) -> None:
-    """Generate and save training plots (confusion matrix, learning curves)."""
+
+def train_model(
+    n_samples: int = DEFAULT_SAMPLE_SIZE,
+    model_params: Optional[Dict[str, Any]] = None,
+    mlflow_tracking_uri: Optional[str] = None,
+    register_model: bool = True,
+    data_path: Optional[str] = None,
+    generate_new_data: bool = False,
+) -> str:
+    """
+    Train credit scoring model with MLflow tracking.
+
+    Args:
+        n_samples: Number of training samples (used if generating new data)
+        model_params: Optional model hyperparameters
+        mlflow_tracking_uri: MLflow tracking server URI
+        register_model: Whether to register model in MLflow Registry
+        data_path: Path to CSV data file (uses default if None)
+        generate_new_data: If True, generate new data instead of loading from CSV
+
+    Returns:
+        MLflow run ID
+    """
+    if model_params is None:
+        model_params = DEFAULT_MODEL_PARAMS
+
+    # Set MLflow tracking URI
+    if mlflow_tracking_uri:
+        mlflow.set_tracking_uri(mlflow_tracking_uri)
+
+    # Set or create experiment
+    mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
+
+    # Load or generate data
+    if generate_new_data:
+        logger.info(f"Generating {n_samples} new training samples...")
+        df, saved_path = generate_and_save_data(n_samples=n_samples)
+        logger.info(f"Data saved to {saved_path}")
+    else:
+        data_file = data_path if data_path else RAW_DATA_PATH
+        try:
+            logger.info(f"Loading training data from {data_file}...")
+            df = load_from_csv(data_file)
+        except FileNotFoundError:
+            logger.warning(f"Data file not found at {data_file}. Generating new data...")
+            df, saved_path = generate_and_save_data(n_samples=n_samples)
+            logger.info(f"Data saved to {saved_path}")
+
+    X_train, X_test, y_train, y_test = split_data(df, test_size=TEST_SIZE)
+
+    logger.info(f"Training data shape: {X_train.shape}")
+    logger.info(f"Test data shape: {X_test.shape}")
+
+    with mlflow.start_run() as run:
+        run_id = run.info.run_id
+        logger.info(f"MLflow Run ID: {run_id}")
+
+        # Log parameters
+        mlflow.log_params(model_params)
+        mlflow.log_param("n_samples", n_samples)
+        mlflow.log_param("test_size", TEST_SIZE)
+        mlflow.log_param("numerical_features", NUMERICAL_FEATURES)
+        mlflow.log_param("categorical_features", CATEGORICAL_FEATURES)
+
+        # Create and train model
+        logger.info("Training model...")
+        model = create_model_pipeline(model_params)
+        model.fit(X_train, y_train)
+
+        # Evaluate model
+        logger.info("Evaluating model...")
+        metrics = evaluate_model(model, X_test, y_test)
+
+        # Log metrics
+        for metric_name, metric_value in metrics.items():
+            mlflow.log_metric(metric_name, metric_value)
+            logger.info(f"{metric_name}: {metric_value:.4f}")
+
+        # Log confusion matrix
+        y_pred = model.predict(X_test)
+        cm = confusion_matrix(y_test, y_pred)
+        mlflow.log_text(str(cm), "confusion_matrix.txt")
+
+        # Log classification report
+        report = classification_report(y_test, y_pred)
+        mlflow.log_text(report, "classification_report.txt")
+
+        # Log feature importances
+        feature_names = NUMERICAL_FEATURES + list(
+            model.named_steps["preprocessor"]
+            .named_transformers_["cat"]
+            .get_feature_names_out(CATEGORICAL_FEATURES)
+        )
+        importances = model.named_steps["classifier"].feature_importances_
+        importance_df = pd.DataFrame(
+            {"feature": feature_names, "importance": importances}
+        ).sort_values("importance", ascending=False)
+
+        mlflow.log_text(importance_df.to_string(), "feature_importances.txt")
+
+        # Log model
+        logger.info("Logging model to MLflow...")
+        mlflow.sklearn.log_model(
+            model,
+            artifact_path="model",
+            registered_model_name=MODEL_NAME if register_model else None,
+        )
+
+        # Log dataset info
+        mlflow.log_param("target_distribution", df["target"].value_counts().to_dict())
+
+        # Save plots and metrics history
+        try:
+            save_plots(model, X_test, y_test, X_train, y_train, run_id)
+        except Exception as e:
+            logger.warning(f"Failed to generate plots: {e}")
+
+        logger.info(f"Model training complete. Run ID: {run_id}")
+
+        return run_id
+
+
+def save_plots(
+    model: Pipeline,
+    X_test: pd.DataFrame,
+    y_test: pd.Series,
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    run_id: str,
+) -> None:
+    """
+    Generate and save training plots (confusion matrix, learning curves).
+
+    Args:
+        model: Trained model pipeline
+        X_test: Test features
+        y_test: Test labels
+        X_train: Train features
+        y_train: Train labels
+        run_id: MLflow run ID
+    """
     import matplotlib.pyplot as plt
     import seaborn as sns
-    from sklearn.metrics import log_loss
+    from sklearn.metrics import accuracy_score, f1_score, log_loss
 
     # 1. Confusion Matrix
     plt.figure(figsize=(8, 6))
@@ -110,13 +278,16 @@ def save_plots(model: Pipeline, X_test: pd.DataFrame, y_test: pd.Series,
     plt.savefig("confusion_matrix.png")
     plt.close()
 
-    # 2. Learning Curves
+    # 2. Learning Curves (Loss, Accuracy, F1)
+    # Get classifier and preprocessor
     clf = model.named_steps["classifier"]
     preprocessor = model.named_steps["preprocessor"]
-    
+
+    # Transform data
     X_train_trans = preprocessor.transform(X_train)
     X_test_trans = preprocessor.transform(X_test)
 
+    # Initialize history buffers
     train_loss = list(clf.train_score_)
     test_loss = []
     train_acc = []
@@ -125,154 +296,148 @@ def save_plots(model: Pipeline, X_test: pd.DataFrame, y_test: pd.Series,
     test_f1 = []
 
     # Calculate metrics for each boosting stage
-    for y_pred in clf.staged_predict(X_test_trans):
+    # Note: calculating full train metrics per stage can be slow for large datasets
+    # limiting to chunks or subsets might be wise, but for verification it's fine.
+
+    # Test Metrics per stage
+    for i, y_pred in enumerate(clf.staged_predict(X_test_trans)):
         test_acc.append(accuracy_score(y_test, y_pred))
         test_f1.append(f1_score(y_test, y_pred))
 
-    for y_proba in clf.staged_predict_proba(X_test_trans):
+    for i, y_proba in enumerate(clf.staged_predict_proba(X_test_trans)):
         test_loss.append(log_loss(y_test, y_proba))
 
-    for y_pred in clf.staged_predict(X_train_trans):
+    # Train Metrics per stage (Acc/F1 - Loss is already in train_score_)
+    for i, y_pred in enumerate(clf.staged_predict(X_train_trans)):
         train_acc.append(accuracy_score(y_train, y_pred))
         train_f1.append(f1_score(y_train, y_pred))
 
-    # Save history
-    history_df = pd.DataFrame({
-        "stage": range(len(train_loss)),
-        "train_loss": train_loss,
-        "test_loss": test_loss,
-        "train_accuracy": train_acc,
-        "test_accuracy": test_acc,
-        "train_f1": train_f1,
-        "test_f1": test_f1,
-    })
+    # Save history to CSV
+    history_df = pd.DataFrame(
+        {
+            "stage": range(len(train_loss)),
+            "train_loss": train_loss,
+            "test_loss": test_loss,
+            "train_accuracy": train_acc,
+            "test_accuracy": test_acc,
+            "train_f1": train_f1,
+            "test_f1": test_f1,
+        }
+    )
     history_df.to_csv("training_history.csv", index=False)
 
+    # Log artifacts to MLflow
     mlflow.log_artifact("confusion_matrix.png")
     mlflow.log_artifact("training_history.csv")
+
     print(f"Saved plots and history for run {run_id}")
 
 
-def train_model(
+def get_latest_model_version(
+    model_name: str = MODEL_NAME,
     mlflow_tracking_uri: Optional[str] = None,
-    register_model: bool = True,
-    data_path: Optional[str] = None,
-) -> str:
-    """Train credit scoring model with MLflow tracking."""
+) -> Optional[int]:
+    """
+    Get the latest version of a registered model.
 
-    # Set MLflow tracking URI and Experiment
-    # Ensure env vars DATABRICKS_HOST and DATABRICKS_TOKEN are set in CML
-    mlflow.set_tracking_uri("databricks")
-    mlflow.set_registry_uri("databricks-uc")
-    mlflow.set_experiment("/Users/mohamed.hakim.dev@gmail.com/credit-score")
+    Args:
+        model_name: Name of the registered model
+        mlflow_tracking_uri: MLflow tracking server URI
 
-    
+    Returns:
+        Latest version number or None if model not found
+    """
+    if mlflow_tracking_uri:
+        mlflow.set_tracking_uri(mlflow_tracking_uri)
 
-    # Load Data - STRICTLY from DVC/Path
-    data_file = data_path if data_path else RAW_DATA_PATH
-    logger.info(f"Loading training data from {data_file}...")
-    
-    if not os.path.exists(data_file):
-        raise FileNotFoundError(
-            f"Data file not found at {data_file}. Ensure DVC pull was successful."
-        )
-        
-    df = load_from_csv(data_file)
-    X_train, X_test, y_train, y_test = split_data(df, test_size=TEST_SIZE)
+    client = mlflow.MlflowClient()
 
-    with mlflow.start_run() as run:
-        run_id = run.info.run_id
-        logger.info(f"MLflow Run ID: {run_id}")
+    try:
+        versions = client.search_model_versions(f"name='{model_name}'")
+        if versions:
+            return max(int(v.version) for v in versions)
+    except Exception as e:
+        logger.warning(f"Could not get model versions: {e}")
 
-        # Log parameters
-        mlflow.log_params(DEFAULT_MODEL_PARAMS)
-        mlflow.log_param("test_size", TEST_SIZE)
+    return None
 
-        # Train
-        logger.info("Training model...")
-        model = create_model_pipeline(DEFAULT_MODEL_PARAMS)
-        model.fit(X_train, y_train)
 
-        # Evaluate
-        logger.info("Evaluating model...")
-        metrics = evaluate_model(model, X_test, y_test)
+def promote_model_to_production(
+    model_name: str = MODEL_NAME,
+    version: Optional[int] = None,
+    mlflow_tracking_uri: Optional[str] = None,
+) -> None:
+    """
+    Promote a model version to Production stage.
 
-        # Log metrics
-        for metric_name, metric_value in metrics.items():
-            mlflow.log_metric(metric_name, metric_value)
-            logger.info(f"{metric_name}: {metric_value:.4f}")
+    Args:
+        model_name: Name of the registered model
+        version: Version to promote (latest if None)
+        mlflow_tracking_uri: MLflow tracking server URI
+    """
+    if mlflow_tracking_uri:
+        mlflow.set_tracking_uri(mlflow_tracking_uri)
 
-        # Save metrics locally for CML report
-        import json
-        with open("metrics.json", "w") as f:
-            json.dump(metrics, f, indent=2)
+    client = mlflow.MlflowClient()
 
-        # Log artifacts
-        y_pred = model.predict(X_test)
-        mlflow.log_text(str(confusion_matrix(y_test, y_pred)), "confusion_matrix.txt")
-        mlflow.log_text(classification_report(y_test, y_pred), "classification_report.txt")
+    if version is None:
+        version = get_latest_model_version(model_name, mlflow_tracking_uri)
 
-        # Log Model
-        logger.info("Logging model to MLflow...")
-        signature = infer_signature(X_test, y_pred)
-        
-        # First, log the model without registration
-        model_info = mlflow.sklearn.log_model(
-            model,
-            artifact_path="model",
-            signature=signature,
-        )
-        logger.info(f"Model logged to: {model_info.model_uri}")
-        
-        # Then, register the model separately if requested
-        if register_model:
-            try:
-                logger.info(f"Registering model as '{MODEL_NAME}'...")
-                model_version = mlflow.register_model(
-                    model_uri=model_info.model_uri,
-                    name=MODEL_NAME,
-                )
-                logger.info(f"Registered model version: {model_version.version}")
-            except Exception as e:
-                logger.warning(
-                    f"Model registration failed (model still logged): {e}\n"
-                    "You can manually register the model from the Databricks UI."
-                )
+    if version is None:
+        raise ValueError(f"No versions found for model: {model_name}")
 
-        # Generate and Log Plots
-        try:
-            save_plots(model, X_test, y_test, X_train, y_train, run_id)
-        except Exception as e:
-            logger.warning(f"Failed to generate plots: {e}")
+    # Transition to Production
+    client.transition_model_version_stage(
+        name=model_name,
+        version=version,
+        stage="Production",
+        archive_existing_versions=True,
+    )
 
-        return run_id
+    logger.info(f"Promoted {model_name} version {version} to Production")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train credit scoring model")
+    import argparse
 
+    parser = argparse.ArgumentParser(description="Train credit scoring model")
+    parser.add_argument(
+        "--n-samples",
+        type=int,
+        default=DEFAULT_SAMPLE_SIZE,
+        help="Number of training samples (used when generating new data)",
+    )
     parser.add_argument(
         "--mlflow-uri",
         type=str,
-        default=os.getenv("MLFLOW_TRACKING_URI", "databricks"),
+        default=os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000"),
         help="MLflow tracking URI",
     )
     parser.add_argument(
-        "--register", 
-        action="store_true", 
-        help="Register model in MLflow Registry (requires proper IAM permissions)"
+        "--register", action="store_true", default=True, help="Register model in MLflow Registry"
+    )
+    parser.add_argument(
+        "--promote", action="store_true", help="Promote model to Production after training"
     )
     parser.add_argument(
         "--data-path",
         type=str,
         default=None,
-        help="Path to CSV data file",
+        help="Path to CSV data file (uses default data/raw/credit_data.csv if not specified)",
+    )
+    parser.add_argument(
+        "--generate-data", action="store_true", help="Generate new data instead of loading from CSV"
     )
 
     args = parser.parse_args()
 
-    train_model(
+    run_id = train_model(
+        n_samples=args.n_samples,
         mlflow_tracking_uri=args.mlflow_uri,
         register_model=args.register,
         data_path=args.data_path,
+        generate_new_data=args.generate_data,
     )
+
+    if args.promote:
+        promote_model_to_production(mlflow_tracking_uri=args.mlflow_uri)
