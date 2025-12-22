@@ -29,7 +29,7 @@ from ml.config import (
     CATEGORICAL_FEATURES,
     DEFAULT_MODEL_PARAMS,
     DEFAULT_SAMPLE_SIZE,
-    MLFLOW_EXPERIMENT_NAME,
+    "/Users/mohamed.hakim.dev@gmail.com/Credit Score",
     MODEL_NAME,
     NUMERICAL_FEATURES,
     TEST_SIZE,
@@ -123,8 +123,6 @@ def evaluate_model(model: Pipeline, X_test: pd.DataFrame, y_test: pd.Series) -> 
 
 
 def train_model(
-    n_samples: int = DEFAULT_SAMPLE_SIZE,
-    model_params: Optional[Dict[str, Any]] = None,
     mlflow_tracking_uri: Optional[str] = None,
     register_model: bool = True,
     data_path: Optional[str] = None,
@@ -144,15 +142,12 @@ def train_model(
     Returns:
         MLflow run ID
     """
-    if model_params is None:
-        model_params = DEFAULT_MODEL_PARAMS
 
     # Set MLflow tracking URI
-    if mlflow_tracking_uri:
-        mlflow.set_tracking_uri(mlflow_tracking_uri)
+    mlflow.set_tracking_uri("databricks")
 
     # Set or create experiment
-    mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
+    mlflow.set_experiment("/Users/mohamed.hakim.dev@gmail.com/Credit Score")
 
     # Load or generate data
     if generate_new_data:
@@ -406,16 +401,11 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Train credit scoring model")
-    parser.add_argument(
-        "--n-samples",
-        type=int,
-        default=DEFAULT_SAMPLE_SIZE,
-        help="Number of training samples (used when generating new data)",
-    )
+
     parser.add_argument(
         "--mlflow-uri",
         type=str,
-        default=os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000"),
+        default=os.getenv("MLFLOW_TRACKING_URI", "https://dbc-1391691d-cdf9.cloud.databricks.com"),
         help="MLflow tracking URI",
     )
     parser.add_argument(
@@ -437,7 +427,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     run_id = train_model(
-        n_samples=args.n_samples,
         mlflow_tracking_uri=args.mlflow_uri,
         register_model=args.register,
         data_path=args.data_path,
