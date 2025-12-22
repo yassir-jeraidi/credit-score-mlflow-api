@@ -213,7 +213,7 @@ def train_model(
         mlflow.sklearn.log_model(
             model,
             artifact_path="model",
-            registered_model_name=MODEL_NAME if register_model else None,
+            registered_model_name=MODEL_NAME
         )
 
         # Generate and Log Plots
