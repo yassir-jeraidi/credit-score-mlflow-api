@@ -66,7 +66,7 @@ jobs:
         # You can register the model manually from the Databricks UI.
         # To enable registration, add --register flag (requires proper IAM setup).
         run: |
-          python -m ml.train \
+          python -m ml.cloud_train \
             --mlflow-uri "${{ secrets.DATABRICKS_HOST }}"
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
