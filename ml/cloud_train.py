@@ -172,6 +172,8 @@ def train_model(
         "ci": "cml",
     })
 
+    mlflow.end_run()  # <-- ADD THIS LINE
+
     
 
     # Load Data - STRICTLY from DVC/Path
