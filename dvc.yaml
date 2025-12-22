@@ -1,0 +1,53 @@
+stages:
+  train:
+    cmd: >-
+      python -m ml.cloud_train
+      --mlflow-uri ${DATABRICKS_HOST}
+    deps:
+      - ml/
+      - requirements.txt
+    params:
+      - train.epochs
+      - train.batch_size
+      - train.learning_rate
+    outs:
+      - models/model.pkl
+      - training_history.csv
+      - confusion_matrix.png
+    metrics:
+      - metrics.json:
+          cache: false
+    plots:
+      - training_history.csv:
+          x: stage
+          y:
+            training_history.csv: [train_loss, test_loss]
+          title: "Loss Evolution"
+          x_label: "Stage"
+          y_label: "Loss"
+      - training_history.csv:
+          x: stage
+          y:
+            training_history.csv: [train_accuracy, test_accuracy]
+          title: "Accuracy Evolution"
+          x_label: "Stage"
+          y_label: "Accuracy"
+      - training_history.csv:
+          x: stage
+          y:
+            training_history.csv: [train_f1, test_f1]
+          title: "F1 Score Evolution"
+          x_label: "Stage"
+          y_label: "F1 Score"
+      - confusion_matrix.png
+
+  evaluate:
+    cmd: python -m ml.evaluate
+    deps:
+      - models/model.pkl
+      - data/test/
+    outs:
+      - evaluation_results.json
+    metrics:
+      - evaluation_results.json:
+          cache: false
