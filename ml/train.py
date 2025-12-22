@@ -165,6 +165,8 @@ def train_model(
     mlflow.set_registry_uri("databricks-uc")
     mlflow.set_experiment("/Users/mohamed.hakim.dev@gmail.com/credit-score")
 
+    signature = infer_signature(X_test, y_pred)
+
     # Load Data - STRICTLY from DVC/Path
     data_file = data_path if data_path else RAW_DATA_PATH
     logger.info(f"Loading training data from {data_file}...")
@@ -214,7 +216,8 @@ def train_model(
         mlflow.sklearn.log_model(
             model,
             artifact_path="model",
-            registered_model_name=MODEL_NAME
+            registered_model_name=MODEL_NAME,
+            signature=signature,
         )
 
         # Generate and Log Plots
