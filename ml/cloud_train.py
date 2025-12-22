@@ -165,6 +165,12 @@ def train_model(
     mlflow.set_tracking_uri("databricks")
     mlflow.set_registry_uri("databricks-uc")
     mlflow.set_experiment("/Users/mohamed.hakim.dev@gmail.com/credit-score")
+    mlflow.set_tags({
+        "project": "credit-scoring",
+        "dataset": "dvc-managed",
+        "framework": "sklearn",
+        "ci": "cml",
+    })
 
     
 
@@ -223,21 +229,21 @@ def train_model(
             signature=signature,
         )
         logger.info(f"Model logged to: {model_info.model_uri}")
-        
-        # Then, register the model separately if requested
-        if register_model:
-            try:
-                logger.info(f"Registering model as '{MODEL_NAME}'...")
-                model_version = mlflow.register_model(
-                    model_uri=model_info.model_uri,
-                    name=MODEL_NAME,
-                )
-                logger.info(f"Registered model version: {model_version.version}")
-            except Exception as e:
-                logger.warning(
-                    f"Model registration failed (model still logged): {e}\n"
-                    "You can manually register the model from the Databricks UI."
-                )
+
+        # Save Model
+
+        try:
+            logger.info(f"Saving model as '{MODEL_NAME}'...")
+            mlflow.sklearn.save_model(
+                MODEL_NAME,
+                "credit-score-catalog/credit-scoring/"
+            )
+            logger.info(f"Model saved successfully")
+        except Exception as e:
+            logger.warning(
+                f"Model Saving failed (model still logged): {e}\n"
+                "You can manually register the model from the Databricks UI."
+            )
 
         # Generate and Log Plots
         try:
