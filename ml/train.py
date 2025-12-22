@@ -147,7 +147,7 @@ def train_model(
     mlflow.set_tracking_uri("databricks")
 
     # Set or create experiment
-    mlflow.set_experiment("/Users/mohamed.hakim.dev@gmail.com/Credit Score")
+    mlflow.set_experiment("/Users/mohamed.hakim.dev@gmail.com/credit-score")
 
     # Load or generate data
     if generate_new_data:
